@@ -1,4 +1,4 @@
-﻿# Star-Citizen-Localization-Spanish
+﻿# Star-Citizen-Localization-Installer
 
 Pipeline local para mantener y distribuir la traduccion al espanol de Star Citizen.
 
@@ -75,44 +75,6 @@ Orden de aplicacion durante el build:
 
 Por compatibilidad, si un overlay concatenativo antiguo todavia contiene la cadena completa en lugar del sufijo, el build recorta automaticamente el prefijo base antes de anexarlo.
 
-## Flujo por lotes de traduccion
-
-Para traducir `input/current/global.ini` en bloques de 250 lineas y validar cada bloque:
-
-1. Inicializa `source/translations/base-spanish.ini` con el contenido actual del origen:
-
-```bash
-python .\scripts\manage_translation_batches.py init
-```
-
-2. Exporta el lote que quieras traducir:
-
-```bash
-python .\scripts\manage_translation_batches.py export-batch --batch 1
-```
-
-Esto crea `source.ini`, `current.ini`, `translated.ini` y `README.txt` en `input/translation-batches/batch-0001/`.
-
-3. Traduce `source.ini` a `translated.ini` usando la skill `translate-loc`.
-4. Aplica el lote traducido y valida tanto el lote como el archivo completo:
-
-```bash
-python .\scripts\manage_translation_batches.py apply-batch --batch 1
-```
-
-5. Consulta el progreso cuando lo necesites:
-
-```bash
-python .\scripts\manage_translation_batches.py status
-```
-
-Validaciones del build:
-
-- Falla si `base-spanish.ini` no aporta ninguna clave del parche actual, salvo que fuerces `--allow-empty-translation-memory`.
-- Falla si la memoria maestra o cualquier overlay contiene claves inexistentes en el `global.ini` ingles.
-- Falla si se alteran placeholders, secuencias escapadas o markup respecto al archivo origen.
-- Falla si cambia el orden o el conjunto de claves en cualquiera de las variantes generadas.
-
 ## Resultado
 
 El comando anterior crea:
@@ -135,3 +97,54 @@ Despues de cada build se generan:
   Claves nuevas del parche que aun no tienen traduccion y por tanto se quedaron en ingles.
 - `dist/<version>/reports/summary.txt`
   Resumen del numero total de claves, cobertura base y pendientes.
+
+## Instalador ejecutable
+
+El repositorio incluye una app con interfaz grafica para distribuir la traduccion como ejecutable de Windows.
+
+La app:
+
+- intenta detectar automaticamente la carpeta `LIVE` de Star Citizen;
+- acepta una ruta personalizada;
+- permite elegir entre `base`, `componentes`, `blueprints` o `componentes-blueprints`;
+- copia `user.cfg` y `data/Localization/spanish_(spain)/global.ini` directamente sobre la instalacion;
+- sobrescribe archivos existentes si ya estan presentes.
+
+Estructura:
+
+- `installer/app.py`
+  Interfaz `Flet` del instalador.
+- `installer/installer_core.py`
+  Deteccion de rutas, descubrimiento de paquetes y copia de archivos.
+- `scripts/build_installer.py`
+  Empaquetado a `.exe` con `PyInstaller`, incluyendo los recursos de `Flet`.
+
+Antes de construir el instalador, genera primero una version en `dist/<version>/staging` con `build_distributions.py`.
+
+Para crear el ejecutable:
+
+```bash
+python -m venv .installer-venv
+.\.installer-venv\Scripts\python.exe -m pip install -r .\installer\requirements-build.txt
+.\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version analysis-test
+```
+
+Si omites `--version`, el script usa automaticamente la carpeta mas reciente dentro de `dist/`.
+
+Requisitos para el ejecutable:
+
+```bash
+.\installer\requirements-build.txt
+```
+
+Se recomienda un entorno separado para el instalador porque `PyInstaller` y `scdatatools` no comparten bien la misma version de `packaging` en este repo.
+
+Salida esperada:
+
+- `dist-installer/StarCitizenSpanishInstaller.exe`
+
+Tambien puedes abrir la app directamente en modo script:
+
+```bash
+.\venv\Scripts\python.exe .\installer\app.py
+```
