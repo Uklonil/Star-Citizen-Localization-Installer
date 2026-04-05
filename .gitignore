@@ -1,0 +1,6 @@
+dist/
+input/
+*.zip
+venv/
+__pycache__/
+.scdt-cache/
