@@ -66,8 +66,11 @@ def write_global_ini(entries: Iterable[Entry], path: str | Path) -> None:
     absolute_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [f"{entry.key}={entry.value}" for entry in entries]
-    with absolute_path.open("w", encoding="utf-8", newline="\n") as file_handle:
-        file_handle.write("\n".join(lines))
+    # Star Citizen expects the same physical file format as the extracted
+    # original global.ini: UTF-8 with BOM, CRLF line endings, and a final EOL.
+    with absolute_path.open("w", encoding="utf-8-sig", newline="") as file_handle:
+        file_handle.write("\r\n".join(lines))
+        file_handle.write("\r\n")
 
 
 def resolve_reference_tokens(
