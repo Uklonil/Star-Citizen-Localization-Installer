@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALLER_ROOT = REPO_ROOT / "installer"
 BUILD_ROOT = REPO_ROOT / "build" / "installer"
 DIST_ROOT = REPO_ROOT / "dist"
+ICON_PATH = INSTALLER_ROOT / "assets" / "app-icon.ico"
 
 
 def find_version_dir(version: str | None) -> Path:
@@ -51,6 +52,8 @@ def prepare_assets(version_dir: Path) -> Path:
 
 def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name: str) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+    ui_texts_root = INSTALLER_ROOT / "ui_texts"
+    installer_assets_root = INSTALLER_ROOT / "assets"
     command = [
         sys.executable,
         "-m",
@@ -60,6 +63,16 @@ def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name
         "--onefile",
         "--windowed",
         "--uac-admin",
+    ]
+    if ICON_PATH.is_file():
+        command.extend(
+            [
+                "--icon",
+                str(ICON_PATH),
+            ]
+        )
+    command.extend(
+        [
         "--name",
         name,
         "--distpath",
@@ -70,6 +83,10 @@ def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name
         str(BUILD_ROOT / "spec"),
         "--add-data",
         f"{assets_root};installer_assets",
+        "--add-data",
+        f"{ui_texts_root};installer/ui_texts",
+        "--add-data",
+        f"{installer_assets_root};installer/assets",
         "--hidden-import",
         "installer.installer_core",
         "--hidden-import",
@@ -83,14 +100,15 @@ def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name
         "--collect-all",
         "flet_desktop",
         str(app_path),
-    ]
+        ]
+    )
     subprocess.run(command, check=True, cwd=REPO_ROOT)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Construye el instalador ejecutable de la traduccion.")
+    parser = argparse.ArgumentParser(description="Construye el instalador ejecutable de localizacion.")
     parser.add_argument("--version", help="Version concreta bajo dist/<version>. Si se omite, usa la mas reciente.")
-    parser.add_argument("--name", default="StarCitizenSpanishInstaller")
+    parser.add_argument("--name", default="StarCitizenLocalizationInstaller")
     parser.add_argument("--output-dir", default=str(REPO_ROOT / "dist-installer"))
     args = parser.parse_args()
 

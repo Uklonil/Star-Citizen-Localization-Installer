@@ -22,7 +22,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Inspecciona claves concretas mostrando origen, traduccion y tokens.")
     parser.add_argument("--keys-file", required=True)
     parser.add_argument("--english-global-ini", default="input/current/global.ini")
-    parser.add_argument("--translation-memory", default="source/translations/base-spanish.ini")
+    parser.add_argument("--translation-memory", default="source/languages/es-es/translation.ini")
     parser.add_argument("--output", default="dist/validation/inspected-mismatches.txt")
     args = parser.parse_args()
 
@@ -46,7 +46,7 @@ def main() -> int:
         lines.extend(
             [
                 f"Clave: {key}",
-                f"Linea base-spanish.ini: {line_number}",
+                f"Linea {translation_path.name}: {line_number}",
                 f"Tokens origen: {english_tokens}",
                 f"Tokens traduccion: {candidate_tokens}",
                 f"Origen: {english_value}",

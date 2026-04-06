@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -23,6 +24,9 @@ class MergeResult:
     missing: list[Entry]
     missing_count: int
     total_count: int
+
+
+REFERENCE_TOKEN_RE = re.compile(r"@([A-Za-z0-9_.,-]+)@")
 
 
 def resolve_path(path: str | Path) -> Path:
@@ -64,6 +68,42 @@ def write_global_ini(entries: Iterable[Entry], path: str | Path) -> None:
     lines = [f"{entry.key}={entry.value}" for entry in entries]
     with absolute_path.open("w", encoding="utf-8", newline="\n") as file_handle:
         file_handle.write("\n".join(lines))
+
+
+def resolve_reference_tokens(
+    value: str,
+    *,
+    reference_map: dict[str, str],
+    missing_tokens: set[str] | None = None,
+) -> str:
+    def replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        replacement = reference_map.get(key)
+        if replacement is None:
+            if missing_tokens is not None:
+                missing_tokens.add(key)
+            return match.group(0)
+        return replacement
+
+    return REFERENCE_TOKEN_RE.sub(replace, value)
+
+
+def resolve_reference_map(
+    mapping: dict[str, str],
+    *,
+    reference_map: dict[str, str],
+) -> tuple[dict[str, str], set[str]]:
+    resolved: dict[str, str] = {}
+    missing_tokens: set[str] = set()
+
+    for key, value in mapping.items():
+        resolved[key] = resolve_reference_tokens(
+            value,
+            reference_map=reference_map,
+            missing_tokens=missing_tokens,
+        )
+
+    return resolved, missing_tokens
 
 
 def merge_translations(english_data: GlobalIniData, translation_map: dict[str, str]) -> MergeResult:

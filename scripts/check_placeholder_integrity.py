@@ -72,7 +72,7 @@ def main() -> int:
         description="Detecta claves cuya traduccion altera placeholders, escapes o markup respecto al global.ini ingles."
     )
     parser.add_argument("--english-global-ini", default="input/current/global.ini")
-    parser.add_argument("--translation-memory", default="source/translations/base-spanish.ini")
+    parser.add_argument("--translation-memory", default="source/languages/es-es/translation.ini")
     parser.add_argument("--output-dir", default="dist/validation")
     parser.add_argument(
         "--limit",

@@ -213,7 +213,7 @@ def command_status(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gestiona traducciones por lotes para global.ini.")
     parser.add_argument("--source", default="input/current/global.ini")
-    parser.add_argument("--destination", default="source/translations/base-spanish.ini")
+    parser.add_argument("--destination", default="source/languages/es-es/translation.ini")
     parser.add_argument("--workspace", default="input/translation-batches")
     parser.add_argument("--batch-size", type=int, default=250)
 

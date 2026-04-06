@@ -1,150 +1,613 @@
-﻿# Star-Citizen-Localization-Installer
+# Star-Citizen-Localization-Spanish
 
-Pipeline local para mantener y distribuir la traduccion al espanol de Star Citizen.
+## English
 
-## Objetivo
+Repository to maintain, validate, and distribute Star Citizen localizations.
 
-Generar automaticamente paquetes ZIP listos para extraer dentro de la carpeta `LIVE` del juego a partir de:
+This project covers three tasks:
 
-- El `global.ini` original en ingles de cada parche.
-- Una memoria maestra de traducciones en espanol.
-- Overlays opcionales para variantes de distribucion.
+- maintain master translation memories per language in `source/languages/<language>/`;
+- generate ready-to-copy packages for `LIVE`, with variants and overlays;
+- build a Windows installer to apply the localization over an existing installation.
 
-El sistema genera cuatro variantes:
+### Credits and source material
+
+Component, blueprint, and illegal goods overlays come from:
+
+- [ExoAE/ScCompLangPack](https://github.com/ExoAE/ScCompLangPack)
+
+### Languages and variants
+
+Each language lives in its own folder:
+
+- `source/languages/es-es/`
+- `source/languages/en/`
+
+Expected structure per language:
+
+- `language.json`
+- `translation.ini`
+- `overlays/modified_global.ini`
+- `overlays/components.ini`
+- `overlays/blueprints.ini`
+- optional `user.cfg`
+
+`language.json` defines:
+
+- `code`
+- `label`
+- `game_language`
+- relative paths for translation memory and overlays
+- whether the language should start directly from `input/current/global.ini`
+
+English is prepared as a base language using the original `global.ini` plus its own overlays.
+
+### What this repository generates
+
+The pipeline generates four variants:
 
 - `base`
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
 
-## Estructura
+Each variant is packaged as a ZIP and also prepared in a `staging` directory for the installer.
 
-- `source/translations/base-spanish.ini`
-  Memoria maestra con las traducciones en espanol por clave.
-- `source/user.cfg`
-  Archivo `user.cfg` que se incluye en todas las distribuciones generadas.
-- `source/overlays/modified_global.ini`
-  Sobrescrituras globales por reemplazo completo de clave, aplicadas a todas las distribuciones.
-- `source/overlays/components.ini`
-  Sobrescrituras para la variante con nombres de componentes.
-- `source/overlays/blueprints.ini`
-  Sobrescrituras para la variante con misiones marcadas con `[BP]`.
+### Project structure
+
+- `source/languages/<language>/`
+  Source content per language.
 - `input/current/global.ini`
-  `global.ini` original en ingles del parche actual.
+  Original English `global.ini` from the current patch.
+- `input/translation-batches/`
+  Workspace for batch-based translation.
+- `scripts/`
+  Extraction, validation, normalization, and build scripts.
+- `installer/`
+  Windows installer app built with `Flet`.
+- `installer/ui_texts/`
+  Localized installer UI texts with English fallback.
 - `dist/`
-  Salida generada automaticamente.
+  Output packages, staging folders, and versioned reports.
+- `dist-installer/`
+  Output executable for the installer.
 
-## Entorno Python
+### Requirements
 
-El repositorio usa un flujo basado en `python` para todo el pipeline. Ya no es necesario usar comandos de PowerShell de forma especifica.
+The main workflow uses Python. Relevant dependencies:
 
-Instala `scdatatools` y el resto de dependencias desde tu entorno Python activo:
+- `scdatatools` to extract the English `global.ini` from `Data.p4k` or the game folder;
+- `Flet` and `PyInstaller` to build the installer;
+- the rest of the installer dependencies are listed in `installer/requirements-build.txt`.
+
+Minimum installation to extract the English file:
 
 ```bash
 python -m pip install scdatatools
 ```
 
-Para extraer el `global.ini` ingles directamente desde el juego:
+Installation for building the installer:
+
+```bash
+python -m venv .installer-venv
+.\.installer-venv\Scripts\python.exe -m pip install -r .\installer\requirements-build.txt
+```
+
+Keeping the installer environment separate is recommended because `PyInstaller` and `scdatatools` do not work well with the same `packaging` version in this repository.
+
+### Recommended workflow per patch
+
+#### 1. Extract the English `global.ini`
+
+From the game folder:
 
 ```bash
 python .\scripts\extract_english_localization.py "D:\RSI\StarCitizen\LIVE"
 ```
 
-Tambien acepta una ruta directa a `Data.p4k`.
+It also accepts a direct path to `Data.p4k`.
 
-## Flujo recomendado por parche
+Default output:
 
-1. Extrae el `global.ini` original en ingles del parche y guardalo en `input/current/global.ini` en la raiz del repositorio.
-   Puedes hacerlo automaticamente con `extract_english_localization.py`.
-2. Manten `source/translations/base-spanish.ini` como tu archivo maestro de traduccion. Debe contener claves reales del parche; si esta vacio o no coincide con el `global.ini` actual, el build fallara por defecto.
-3. Añade en `source/overlays/modified_global.ini` cualquier clave que deba sustituirse por completo en todas las distribuciones.
-4. Añade en `source/overlays/components.ini` solo el sufijo que quieras anexar para componentes.
-5. Añade en `source/overlays/blueprints.ini` solo el sufijo que quieras anexar para `[BP]` y descripciones.
-6. Genera las distribuciones:
+```text
+input/current/global.ini
+```
+
+#### 2. Maintain the master translation memory
+
+```text
+source/languages/<language>/translation.ini
+```
+
+The build compares each translation memory against the current English `global.ini`. If a language starts from English, `translation.ini` can stay empty and `use_english_source_as_base` can be enabled in its `language.json`.
+
+#### 3. Translate in batches when the patch is large
+
+The repository includes `scripts/manage_translation_batches.py` to work in line windows without breaking the final file.
+
+Prepare the initial destination:
+
+```bash
+python .\scripts\manage_translation_batches.py init
+```
+
+Export one batch:
+
+```bash
+python .\scripts\manage_translation_batches.py export-batch --batch 1 --batch-size 250
+```
+
+Apply and validate a translated batch:
+
+```bash
+python .\scripts\manage_translation_batches.py apply-batch --batch 1 --batch-size 250
+```
+
+Check progress:
+
+```bash
+python .\scripts\manage_translation_batches.py status --batch-size 250
+```
+
+Each exported batch creates `source.ini`, `current.ini`, `translated.ini`, and a context `README.txt` in `input/translation-batches/batch-XXXX/`.
+
+#### 4. Adjust overlays
+
+Build application order:
+
+1. `translation.ini` provides the language base translation.
+2. `modified_global.ini` fully replaces a key value.
+3. `components.ini` appends its suffix on top of the base.
+4. `blueprints.ini` appends its suffix on top of the base or the already-extended variant.
+
+For compatibility, if an old overlay still stores the full text instead of only the suffix, the pipeline automatically trims the base prefix before appending it.
+
+`components.ini` and `blueprints.ini` support `@KEY@` references that are resolved against the effective language base.
+
+The installer UI also loads its texts from external files:
+
+- `installer/ui_texts/en.json`
+- `installer/ui_texts/es-es.json`
+
+If a key is missing in the selected language, the installer automatically falls back to the value in `en.json`.
+
+#### 5. Generate distributions
 
 ```bash
 python .\scripts\build_distributions.py --version 4.1.0
 ```
 
-Orden de aplicacion durante el build:
+By default it builds all configured languages. To build only one:
 
-- `base-spanish.ini` aporta la traduccion base.
-- `modified_global.ini` sustituye por completo el valor de la clave en todas las distribuciones.
-- `components.ini` sigue aplicandose como concatenacion de sufijos.
-- `blueprints.ini` sigue aplicandose como concatenacion de sufijos.
+```bash
+python .\scripts\build_distributions.py --version 4.1.0 --language es-es
+```
 
-Por compatibilidad, si un overlay concatenativo antiguo todavia contiene la cadena completa en lugar del sufijo, el build recorta automaticamente el prefijo base antes de anexarlo.
+If needed, you can force a build without a valid base translation memory:
 
-## Resultado
+```bash
+python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translation-memory
+```
 
-El comando anterior crea:
+### Build output
 
-- `dist/<version>/packages/star-citizen-es-<version>-base.zip`
-- `dist/<version>/packages/star-citizen-es-<version>-componentes.zip`
-- `dist/<version>/packages/star-citizen-es-<version>-blueprints.zip`
-- `dist/<version>/packages/star-citizen-es-<version>-componentes-blueprints.zip`
+The build creates:
 
-Cada ZIP contiene la estructura lista para extraer dentro de `LIVE`:
+- `dist/<version>/packages/star-citizen-<language>-<version>-base.zip`
+- `dist/<version>/packages/star-citizen-<language>-<version>-componentes.zip`
+- `dist/<version>/packages/star-citizen-<language>-<version>-blueprints.zip`
+- `dist/<version>/packages/star-citizen-<language>-<version>-componentes-blueprints.zip`
+- `dist/<version>/staging/<language>/<variant>/`
+- `dist/<version>/reports/missing-keys-<language>.ini`
+- `dist/<version>/reports/summary.txt`
+
+Each ZIP package contains:
 
 - `user.cfg`
-- `data/Localization/spanish_(spain)/global.ini`
+- `data/Localization/<game_language>/global.ini`
 
-## Reportes
+### Included validations
 
-Despues de cada build se generan:
+`scripts/build_distributions.py` validates before packaging:
 
-- `dist/<version>/reports/missing-keys.ini`
-  Claves nuevas del parche que aun no tienen traduccion y por tanto se quedaron en ingles.
-- `dist/<version>/reports/summary.txt`
-  Resumen del numero total de claves, cobertura base y pendientes.
+- no unknown keys in translation memory or overlays;
+- placeholders, escapes, and markup remain intact where required;
+- overlay `@KEY@` references can be resolved;
+- output order and keys still match the English `global.ini`.
 
-## Instalador ejecutable
+The repository also includes helper utilities:
 
-El repositorio incluye una app con interfaz grafica para distribuir la traduccion como ejecutable de Windows.
+- `scripts/check_placeholder_integrity.py`
+  Detects keys in a `translation.ini` whose placeholders, escapes, or markup were altered.
+- `scripts/classify_placeholder_mismatches.py`
+  Groups placeholder failures by type.
+- `scripts/classify_newline_mismatches.py`
+  Classifies newline-related issues.
+- `scripts/inspect_mismatch_keys.py`
+  Helps inspect specific keys with issues.
+- `scripts/normalize_blueprints_overlay.py`
+  Replaces literal object names inside `blueprints.ini` with `@KEY@` references to improve consistency.
 
-La app:
+Example integrity check:
 
-- intenta detectar automaticamente la carpeta `LIVE` de Star Citizen;
-- acepta una ruta personalizada;
-- permite elegir entre `base`, `componentes`, `blueprints` o `componentes-blueprints`;
-- copia `user.cfg` y `data/Localization/spanish_(spain)/global.ini` directamente sobre la instalacion;
-- sobrescribe archivos existentes si ya estan presentes.
+```bash
+python .\scripts\check_placeholder_integrity.py
+```
 
-Estructura:
+### Executable installer
+
+The repository includes a Windows GUI app to install the localization directly over Star Citizen.
+
+Components:
 
 - `installer/app.py`
-  Interfaz `Flet` del instalador.
+  `Flet` interface.
 - `installer/installer_core.py`
-  Deteccion de rutas, descubrimiento de paquetes y copia de archivos.
+  Path detection, variant discovery, and file copy logic.
 - `scripts/build_installer.py`
-  Empaquetado a `.exe` con `PyInstaller`, incluyendo los recursos de `Flet`.
+  `.exe` packaging with `PyInstaller`.
+- `installer/ui_texts/*.json`
+  Installer UI texts per language.
 
-Antes de construir el instalador, genera primero una version en `dist/<version>/staging` con `build_distributions.py`.
+The app:
 
-Para crear el ejecutable:
+- tries to detect `LIVE`, `EPTU`, or `PTU` paths;
+- accepts either the channel folder or the `StarCitizen` root;
+- detects available languages in `staging`;
+- allows selecting the language before the variant;
+- allows choosing `base`, `componentes`, `blueprints`, or `componentes-blueprints`;
+- copies `user.cfg` and `data/Localization/<game_language>/global.ini`;
+- warns when the target path requires administrator privileges.
+
+Before building the installer, first generate a version in `dist/<version>/staging` with `build_distributions.py`.
+
+Build the executable:
+
+```bash
+.\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version 4.1.0
+```
+
+If `--version` is omitted, the script uses the most recent folder inside `dist/`.
+
+Expected output:
+
+```text
+dist-installer/StarCitizenLocalizationInstaller.exe
+```
+
+You can also open the app directly in script mode:
+
+```bash
+.\venv\Scripts\python.exe .\installer\app.py
+```
+
+### Quick usage
+
+1. Extract the English `global.ini` for the current patch.
+2. Update `source/languages/<language>/translation.ini`.
+3. Adjust `source/languages/<language>/overlays/*.ini` if needed.
+4. Run `build_distributions.py`.
+5. Distribute the ZIPs or generate the installer with `build_installer.py`.
+
+### Support and additional info
+
+If you want to support this project, you can use my referral code when buying Star Citizen:
+
+```text
+STAR-9999-C6LK
+```
+
+You can also support me directly on Ko-fi:
+
+- [☕ Ko-Fi](https://ko-fi.com/uklonil)
+
+Thanks for using this language distribution and/or the installer.
+
+---
+
+## Español
+
+Repositorio para mantener, validar y distribuir localizaciones de Star Citizen.
+
+El proyecto cubre tres tareas:
+
+- mantener memorias maestras de traduccion por idioma en `source/languages/<idioma>/`;
+- generar paquetes listos para copiar en `LIVE`, con variantes y overlays;
+- construir un instalador de Windows para aplicar la traduccion sobre una instalacion existente.
+
+### Creditos y origen del contenido
+
+La base de la traduccion se ha tomado de:
+
+- [Doncasta1996/Star-Citizen-Spanish](https://github.com/Doncasta1996/Star-Citizen-Spanish)
+
+Los overlays de componentes, blueprints y productos ilegales se han tomado de:
+
+- [ExoAE/ScCompLangPack](https://github.com/ExoAE/ScCompLangPack)
+
+### Idiomas y variantes
+
+Cada idioma vive en su propia carpeta:
+
+- `source/languages/es-es/`
+- `source/languages/en/`
+
+La estructura esperada por idioma es:
+
+- `language.json`
+- `translation.ini`
+- `overlays/modified_global.ini`
+- `overlays/components.ini`
+- `overlays/blueprints.ini`
+- `user.cfg` opcional
+
+`language.json` define:
+
+- `code`
+- `label`
+- `game_language`
+- rutas relativas de memoria y overlays
+- si el idioma debe partir directamente del `input/current/global.ini`
+
+El ingles queda preparado como idioma base usando el `global.ini` original y sus propios overlays.
+
+### Que genera este repo
+
+El pipeline genera cuatro variantes:
+
+- `base`
+- `componentes`
+- `blueprints`
+- `componentes-blueprints`
+
+Cada variante termina empaquetada como ZIP y, ademas, se deja preparada en un directorio `staging` para el instalador.
+
+### Estructura del proyecto
+
+- `source/languages/<idioma>/`
+  Contenido fuente por idioma.
+- `input/current/global.ini`
+  `global.ini` original en ingles del parche actual.
+- `input/translation-batches/`
+  Espacio de trabajo para traducir por lotes.
+- `scripts/`
+  Scripts de extraccion, validacion, normalizacion y build.
+- `installer/`
+  App de instalacion en Windows basada en `Flet`.
+- `installer/ui_texts/`
+  Textos localizados de la interfaz del instalador, con fallback a ingles.
+- `dist/`
+  Salida de paquetes, staging y reportes por version.
+- `dist-installer/`
+  Salida del ejecutable del instalador.
+
+### Requisitos
+
+El flujo principal usa Python. Dependencias relevantes:
+
+- `scdatatools` para extraer el `global.ini` ingles desde `Data.p4k` o desde la carpeta del juego;
+- `Flet` y `PyInstaller` para construir el instalador;
+- el resto de dependencias del instalador estan en `installer/requirements-build.txt`.
+
+Instalacion minima para extraer el archivo ingles:
+
+```bash
+python -m pip install scdatatools
+```
+
+Instalacion para construir el instalador:
 
 ```bash
 python -m venv .installer-venv
 .\.installer-venv\Scripts\python.exe -m pip install -r .\installer\requirements-build.txt
-.\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version analysis-test
 ```
 
-Si omites `--version`, el script usa automaticamente la carpeta mas reciente dentro de `dist/`.
+Se recomienda separar el entorno del instalador porque `PyInstaller` y `scdatatools` no conviven bien con la misma version de `packaging` dentro de este repo.
 
-Requisitos para el ejecutable:
+### Flujo recomendado por parche
+
+#### 1. Extraer el `global.ini` ingles
+
+Desde la carpeta del juego:
 
 ```bash
-.\installer\requirements-build.txt
+python .\scripts\extract_english_localization.py "D:\RSI\StarCitizen\LIVE"
 ```
 
-Se recomienda un entorno separado para el instalador porque `PyInstaller` y `scdatatools` no comparten bien la misma version de `packaging` en este repo.
+Tambien acepta una ruta directa al archivo `Data.p4k`.
+
+La salida por defecto es:
+
+```text
+input/current/global.ini
+```
+
+#### 2. Mantener la memoria maestra de traduccion
+
+```text
+source/languages/<idioma>/translation.ini
+```
+
+El build cruza cada memoria con el `global.ini` ingles actual. Si un idioma parte del ingles, puede dejar `translation.ini` vacio y usar `use_english_source_as_base` en su `language.json`.
+
+#### 3. Traducir por lotes cuando el parche es grande
+
+El repo incluye `scripts/manage_translation_batches.py` para trabajar por ventanas de lineas sin romper el archivo final.
+
+Preparar el destino inicial:
+
+```bash
+python .\scripts\manage_translation_batches.py init
+```
+
+Exportar un lote:
+
+```bash
+python .\scripts\manage_translation_batches.py export-batch --batch 1 --batch-size 250
+```
+
+Aplicar un lote traducido y validarlo:
+
+```bash
+python .\scripts\manage_translation_batches.py apply-batch --batch 1 --batch-size 250
+```
+
+Consultar progreso:
+
+```bash
+python .\scripts\manage_translation_batches.py status --batch-size 250
+```
+
+Cada lote exportado crea `source.ini`, `current.ini`, `translated.ini` y un `README.txt` de contexto en `input/translation-batches/batch-XXXX/`.
+
+#### 4. Ajustar overlays
+
+El orden de aplicacion durante el build es:
+
+1. `translation.ini` aporta la traduccion base del idioma.
+2. `modified_global.ini` reemplaza por completo el valor de una clave.
+3. `components.ini` concatena su sufijo sobre la base.
+4. `blueprints.ini` concatena su sufijo sobre la base o sobre la variante ya extendida.
+
+Por compatibilidad, si un overlay antiguo todavia guarda el texto completo en vez del sufijo, el pipeline recorta automaticamente el prefijo base antes de anexarlo.
+
+Los overlays `components.ini` y `blueprints.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
+
+La interfaz del instalador tambien carga sus textos desde archivos externos:
+
+- `installer/ui_texts/en.json`
+- `installer/ui_texts/es-es.json`
+
+Si falta una clave en el idioma seleccionado, el instalador usa automaticamente el valor de `en.json`.
+
+#### 5. Generar distribuciones
+
+```bash
+python .\scripts\build_distributions.py --version 4.1.0
+```
+
+Por defecto compila todos los idiomas configurados. Para compilar solo uno:
+
+```bash
+python .\scripts\build_distributions.py --version 4.1.0 --language es-es
+```
+
+Si hiciera falta forzar una compilacion sin traduccion base valida:
+
+```bash
+python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translation-memory
+```
+
+### Salida del build
+
+El build crea:
+
+- `dist/<version>/packages/star-citizen-<idioma>-<version>-base.zip`
+- `dist/<version>/packages/star-citizen-<idioma>-<version>-componentes.zip`
+- `dist/<version>/packages/star-citizen-<idioma>-<version>-blueprints.zip`
+- `dist/<version>/packages/star-citizen-<idioma>-<version>-componentes-blueprints.zip`
+- `dist/<version>/staging/<idioma>/<variant>/`
+- `dist/<version>/reports/missing-keys-<idioma>.ini`
+- `dist/<version>/reports/summary.txt`
+
+Cada paquete ZIP contiene:
+
+- `user.cfg`
+- `data/Localization/<game_language>/global.ini`
+
+### Validaciones incluidas
+
+`scripts/build_distributions.py` valida antes de empaquetar:
+
+- que no existan claves desconocidas en la memoria ni en los overlays;
+- que los placeholders, escapes y markup no se rompan donde corresponde;
+- que las referencias `@KEY@` de overlays se puedan resolver;
+- que el orden y las claves de salida sigan el `global.ini` ingles.
+
+Ademas, el repo incluye utilidades auxiliares:
+
+- `scripts/check_placeholder_integrity.py`
+  Detecta claves de una `translation.ini` con placeholders, escapes o markup alterados.
+- `scripts/classify_placeholder_mismatches.py`
+  Agrupa los fallos de placeholders por tipo.
+- `scripts/classify_newline_mismatches.py`
+  Clasifica problemas relacionados con saltos de linea.
+- `scripts/inspect_mismatch_keys.py`
+  Ayuda a inspeccionar claves concretas con incidencias.
+- `scripts/normalize_blueprints_overlay.py`
+  Sustituye nombres literales dentro de `blueprints.ini` por referencias `@KEY@` para mantener mejor la consistencia.
+
+Ejemplo de chequeo de integridad:
+
+```bash
+python .\scripts\check_placeholder_integrity.py
+```
+
+### Instalador ejecutable
+
+El repo incluye una app grafica de Windows para instalar la traduccion directamente sobre Star Citizen.
+
+Componentes:
+
+- `installer/app.py`
+  Interfaz `Flet`.
+- `installer/installer_core.py`
+  Deteccion de rutas, descubrimiento de variantes y copia de archivos.
+- `scripts/build_installer.py`
+  Empaquetado a `.exe` con `PyInstaller`.
+- `installer/ui_texts/*.json`
+  Textos de la interfaz del instalador por idioma.
+
+La app:
+
+- intenta detectar rutas `LIVE`, `EPTU` o `PTU`;
+- acepta la carpeta de canal o la raiz de `StarCitizen`;
+- detecta los idiomas disponibles en el `staging`;
+- permite elegir idioma antes de la variante;
+- permite elegir `base`, `componentes`, `blueprints` o `componentes-blueprints`;
+- copia `user.cfg` y `data/Localization/<game_language>/global.ini`;
+- avisa cuando la ruta requiere permisos de administrador.
+
+Antes de construir el instalador, genera primero una version en `dist/<version>/staging` con `build_distributions.py`.
+
+Construccion del ejecutable:
+
+```bash
+.\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version 4.1.0
+```
+
+Si omites `--version`, el script usa la carpeta mas reciente dentro de `dist/`.
 
 Salida esperada:
 
-- `dist-installer/StarCitizenSpanishInstaller.exe`
+```text
+dist-installer/StarCitizenLocalizationInstaller.exe
+```
 
 Tambien puedes abrir la app directamente en modo script:
 
 ```bash
 .\venv\Scripts\python.exe .\installer\app.py
 ```
+
+### Uso rapido
+
+1. Extrae el `global.ini` ingles del parche actual.
+2. Actualiza `source/languages/<idioma>/translation.ini`.
+3. Ajusta `source/languages/<idioma>/overlays/*.ini` si hace falta.
+4. Ejecuta `build_distributions.py`.
+5. Distribuye los ZIP o genera el instalador con `build_installer.py`.
+
+### Soporte e informacion adicional
+
+Si quieres apoyar este proyecto, puedes usar mi codigo de referencia al comprar Star Citizen:
+
+```text
+STAR-9999-C6LK
+```
+
+Tambien puedes apoyarme directamente en Ko-fi:
+
+- [☕ Ko-Fi](https://ko-fi.com/uklonil)
+
+Gracias por usar esta distribucion de idioma y/o el instalador.

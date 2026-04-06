@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -13,7 +14,8 @@ except ModuleNotFoundError:
 try:
     from .installer_core import (
         DEFAULT_VARIANT,
-        VARIANT_LABELS,
+        LanguageBundle,
+        VARIANT_IDS,
         detect_install_paths,
         discover_asset_bundle,
         install_variant,
@@ -31,9 +33,10 @@ except ImportError:
     try:
         from installer.installer_core import (
             DEFAULT_VARIANT,
-            VARIANT_LABELS,
+            VARIANT_IDS,
             detect_install_paths,
             discover_asset_bundle,
+            LanguageBundle,
             install_variant,
             is_running_as_admin,
             normalize_install_path,
@@ -42,63 +45,203 @@ except ImportError:
     except ImportError:
         from installer_core import (
             DEFAULT_VARIANT,
-            VARIANT_LABELS,
+            VARIANT_IDS,
             detect_install_paths,
             discover_asset_bundle,
+            LanguageBundle,
             install_variant,
             is_running_as_admin,
             normalize_install_path,
             path_requires_admin,
         )
 
+DEFAULT_UI_LANGUAGE = "en"
+_UI_CACHE: dict[str, dict[str, str]] = {}
+KO_FI_URL = "https://ko-fi.com/uklonil"
 
-VARIANT_DESCRIPTIONS = {
-    "base": "Instala solo la traduccion base.",
-    "componentes": "Anade los nombres extendidos de componentes sobre la traduccion base.",
-    "blueprints": "Anade las marcas [BP] y los ajustes de blueprint sobre la traduccion base.",
-    "componentes-blueprints": "Instala la traduccion base con ambos overlays activos.",
-}
+
+def _app_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)  # type: ignore[attr-defined]
+    return Path(__file__).resolve().parent.parent
+
+
+def _ui_texts_dir() -> Path:
+    return _app_base_dir() / "installer" / "ui_texts"
+
+
+def _assets_dir() -> Path:
+    return _app_base_dir() / "installer" / "assets"
+
+
+def _load_ui_text_file(language_code: str) -> dict[str, str]:
+    cached = _UI_CACHE.get(language_code)
+    if cached is not None:
+        return cached
+
+    ui_file = _ui_texts_dir() / f"{language_code}.json"
+    if not ui_file.is_file():
+        _UI_CACHE[language_code] = {}
+        return _UI_CACHE[language_code]
+
+    data = json.loads(ui_file.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"El fichero de UI no contiene un objeto JSON valido: {ui_file}")
+
+    normalized = {str(key): str(value) for key, value in data.items()}
+    _UI_CACHE[language_code] = normalized
+    return normalized
+
+
+def load_ui_strings(language_code: str) -> dict[str, str]:
+    english_strings = _load_ui_text_file(DEFAULT_UI_LANGUAGE)
+    if not english_strings:
+        raise FileNotFoundError("No se ha encontrado la base de textos de UI en ingles.")
+
+    if language_code == DEFAULT_UI_LANGUAGE:
+        return english_strings
+
+    localized_strings = _load_ui_text_file(language_code)
+    merged = dict(english_strings)
+    merged.update(localized_strings)
+    return merged
 
 
 def main(page: ft.Page) -> None:
     bundle = discover_asset_bundle()
-    page.title = "Star Citizen Spanish Installer"
+    window_icon = _assets_dir() / "app-icon.ico"
+    if window_icon.is_file():
+        page.window.icon = str(window_icon)
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 24
     page.window.width = 920
     page.window.height = 760
     page.window.resizable = False
     page.window.maximizable = False
-    page.theme = ft.Theme(color_scheme_seed=ft.Colors.ORANGE)
+    page.theme = ft.Theme(color_scheme_seed=ft.Colors.PURPLE)
     page.bgcolor = "#111315"
     page.scroll = ft.ScrollMode.AUTO
 
-    available_variants = [name for name in VARIANT_LABELS if name in bundle.variants]
-    default_variant = DEFAULT_VARIANT if DEFAULT_VARIANT in bundle.variants else available_variants[0]
+    available_languages = list(bundle.languages.values())
+    default_language = next((language for language in available_languages if language.code == "en"), available_languages[0])
+    selected_language: LanguageBundle = default_language
+    available_variants = [name for name in VARIANT_IDS if name in selected_language.variants]
+    default_variant = DEFAULT_VARIANT if DEFAULT_VARIANT in selected_language.variants else available_variants[0]
+
+    def strings() -> dict[str, str]:
+        return load_ui_strings(selected_language.code)
 
     status_text = ft.Text(
-        value=f"Paquete detectado: {bundle.version}",
+        value="",
         size=13,
         color="#C7CDD3",
     )
     permission_text = ft.Text(size=12, color="#AAB3BB")
     progress_ring = ft.ProgressRing(width=18, height=18, stroke_width=2, visible=False)
     path_field = ft.TextField(
-        label="Ruta de instalacion",
-        hint_text=r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE",
+        label="",
+        hint_text="",
         expand=True,
         autofocus=True,
+    )
+    headline_text = ft.Text(size=28, weight=ft.FontWeight.BOLD)
+    subheadline_text = ft.Text(size=14, color="#C7CDD3")
+    install_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600)
+    path_help_text = ft.Text(size=12, color="#AAB3BB", expand=True)
+    content_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600)
+    status_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600)
+    footer_text = ft.Text(size=12, color="#8E98A1")
+    language_dropdown = ft.Dropdown(
+        label="",
+        value=default_language.code,
+        options=[ft.dropdown.Option(language.code, language.label) for language in available_languages],
+        width=260,
     )
     variant_group = ft.RadioGroup(
         content=ft.Column(spacing=10),
         value=default_variant,
     )
     install_button = ft.FilledButton(
-        text="Instalar o sobrescribir",
+        text="",
         icon=ft.Icons.DOWNLOAD_DONE,
     )
+    browse_button = ft.OutlinedButton("", icon=ft.Icons.FOLDER_OPEN)
+    autodetect_button = ft.TextButton("", icon=ft.Icons.MY_LOCATION)
+    kofi_button = ft.TextButton(icon=ft.Icons.OPEN_IN_NEW)
     confirm_dialog: ft.AlertDialog | None = None
     result_dialog: ft.AlertDialog | None = None
+
+    def format_text(key: str, **kwargs: object) -> str:
+        return strings()[key].format(**kwargs)
+
+    def variant_label(variant_name: str) -> str:
+        return strings()[f"variant_{variant_name.replace('-', '_')}_label"]
+
+    def variant_description(variant_name: str) -> str:
+        return strings()[f"variant_{variant_name.replace('-', '_')}_desc"]
+
+    def apply_ui_language() -> None:
+        page.title = strings()["window_title"]
+        headline_text.value = strings()["headline"]
+        subheadline_text.value = strings()["subheadline"]
+        install_section_text.value = strings()["install_section"]
+        content_section_text.value = strings()["content_section"]
+        status_section_text.value = strings()["status_section"]
+        footer_text.value = strings()["footer_support"]
+        language_dropdown.label = strings()["language_label"]
+        path_field.label = strings()["path_label"]
+        path_field.hint_text = strings()["path_hint"]
+        browse_button.text = strings()["browse_button"]
+        path_help_text.value = strings()["path_help"]
+        autodetect_button.text = strings()["autodetect_button"]
+        install_button.text = strings()["install_button"]
+        kofi_button.text = strings()["footer_kofi_button"]
+
+    def refresh_variant_cards(language: LanguageBundle) -> None:
+        available = [name for name in VARIANT_IDS if name in language.variants]
+        variant_cards = []
+        for variant_name in available:
+            variant_cards.append(
+                ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            ft.Radio(value=variant_name),
+                            ft.Column(
+                                controls=[
+                                    ft.Text(variant_label(variant_name), weight=ft.FontWeight.W_600, size=15),
+                                    ft.Text(
+                                        variant_description(variant_name),
+                                        size=12,
+                                        color="#B8C0C7",
+                                    ),
+                                ],
+                                spacing=4,
+                                expand=True,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                    ),
+                    border=ft.border.all(1, "#2C3138"),
+                    border_radius=12,
+                    padding=14,
+                    bgcolor="#171B20",
+                )
+            )
+
+        variant_group.content.controls = variant_cards
+        variant_group.value = DEFAULT_VARIANT if DEFAULT_VARIANT in language.variants else available[0]
+
+    def handle_language_change(_: ft.ControlEvent) -> None:
+        nonlocal selected_language
+        selected_language = bundle.languages[language_dropdown.value]
+        apply_ui_language()
+        refresh_variant_cards(selected_language)
+        update_status(
+            format_text("status_bundle_detected", version=bundle.version, language=selected_language.label),
+            error=False,
+        )
+        if path_field.value:
+            set_install_path(path_field.value)
 
     def set_busy(is_busy: bool, message: str | None = None) -> None:
         install_button.disabled = is_busy
@@ -124,13 +267,13 @@ def main(page: ft.Page) -> None:
         path_field.value = str(normalized)
         admin_required = path_requires_admin(normalized)
         if admin_required and not is_running_as_admin():
-            permission_text.value = "La ruta seleccionada esta en Program Files. Necesitas ejecutar el instalador como administrador."
+            permission_text.value = strings()["permission_admin_needed"]
             permission_text.color = "#FFB4AB"
         elif admin_required:
-            permission_text.value = "El instalador tiene privilegios de administrador para escribir en Program Files."
+            permission_text.value = strings()["permission_admin_ok"]
             permission_text.color = "#A9D18E"
         else:
-            permission_text.value = "La ruta seleccionada no requiere permisos elevados."
+            permission_text.value = strings()["permission_no_admin"]
             permission_text.color = "#AAB3BB"
         page.update()
 
@@ -138,40 +281,58 @@ def main(page: ft.Page) -> None:
         candidates = detect_install_paths()
         if candidates:
             set_install_path(candidates[0])
-            update_status(f"Ruta detectada automaticamente: {candidates[0]} | Paquete: {bundle.version}")
+            update_status(
+                format_text(
+                    "status_autodetected",
+                    path=candidates[0],
+                    version=bundle.version,
+                    language=selected_language.label,
+                )
+            )
             return
         update_status(
-            f"No se ha detectado la instalacion automaticamente. Selecciona una ruta manual. | Paquete: {bundle.version}",
+            format_text(
+                "status_autodetect_failed",
+                version=bundle.version,
+                language=selected_language.label,
+            ),
             error=True,
         )
 
     def handle_directory_result(event: ft.FilePickerResultEvent) -> None:
         if event.path:
             set_install_path(event.path)
-            update_status(f"Ruta seleccionada manualmente: {path_field.value} | Paquete: {bundle.version}")
+            update_status(
+                format_text(
+                    "status_manual_path",
+                    path=path_field.value,
+                    version=bundle.version,
+                    language=selected_language.label,
+                )
+            )
 
     file_picker = ft.FilePicker(on_result=handle_directory_result)
     page.overlay.append(file_picker)
 
     def browse_install_path(_: ft.ControlEvent) -> None:
-        file_picker.get_directory_path(dialog_title="Selecciona la carpeta LIVE o la carpeta StarCitizen")
+        file_picker.get_directory_path(dialog_title=strings()["dialog_select_folder"])
 
     def confirm_install(_: ft.ControlEvent) -> None:
         raw_path = (path_field.value or "").strip()
         if not raw_path:
-            show_snackbar("Indica una ruta de instalacion.", error=True)
+            show_snackbar(strings()["snackbar_path_required"], error=True)
             return
 
         variant_name = variant_group.value
-        variant_dir = bundle.variants.get(variant_name)
+        variant_dir = selected_language.variants.get(variant_name)
         if variant_dir is None:
-            show_snackbar("La variante seleccionada no esta disponible.", error=True)
+            show_snackbar(strings()["snackbar_variant_missing"], error=True)
             return
 
         try:
             install_root = normalize_install_path(raw_path)
         except Exception as exc:
-            show_snackbar(f"Ruta no valida: {exc}", error=True)
+            show_snackbar(format_text("snackbar_invalid_path", error=exc), error=True)
             return
 
         def close_dialog(_: ft.ControlEvent | None = None) -> None:
@@ -183,41 +344,51 @@ def main(page: ft.Page) -> None:
         def execute_install(_: ft.ControlEvent) -> None:
             if confirm_dialog is not None:
                 page.close(confirm_dialog)
-            set_busy(True, f"Instalando {VARIANT_LABELS[variant_name]} en {install_root}...")
+            set_busy(True, format_text("status_installing", variant=variant_label(variant_name), path=install_root))
 
             try:
-                copied_files = install_variant(variant_dir=variant_dir, install_root=install_root)
+                copied_files = install_variant(
+                    variant_dir=variant_dir,
+                    install_root=install_root,
+                    game_language=selected_language.game_language,
+                )
             except Exception as exc:
-                update_status(f"Error de instalacion: {exc}", error=True)
+                update_status(format_text("status_install_error", error=exc), error=True)
                 show_snackbar(str(exc), error=True)
                 set_busy(False)
                 return
 
             set_busy(False)
             update_status(
-                f"Instalacion completada en {install_root} | Variante: {variant_name} | Archivos: {len(copied_files)}"
+                format_text(
+                    "status_completed",
+                    path=install_root,
+                    variant=variant_name,
+                    count=len(copied_files),
+                )
             )
             copied_preview = "\n".join(str(path) for path in copied_files[:6])
             if len(copied_files) > 6:
-                copied_preview += f"\n... y {len(copied_files) - 6} mas"
+                copied_preview += "\n" + format_text("dialog_result_more", count=len(copied_files) - 6)
 
             nonlocal result_dialog
             result_dialog = ft.AlertDialog(
                 modal=True,
-                title=ft.Text("Instalacion completada"),
+                title=ft.Text(strings()["dialog_install_done_title"]),
                 content=ft.Text(
                     "\n".join(
                         [
-                            f"Version del paquete: {bundle.version}",
-                            f"Destino: {install_root}",
-                            f"Variante: {VARIANT_LABELS[variant_name]}",
-                            f"Archivos copiados: {len(copied_files)}",
+                            format_text("dialog_result_version", version=bundle.version),
+                            format_text("dialog_result_language", language=selected_language.label),
+                            format_text("dialog_result_destination", path=install_root),
+                            format_text("dialog_result_variant", variant=variant_label(variant_name)),
+                            format_text("dialog_result_files", count=len(copied_files)),
                             "",
                             copied_preview,
                         ]
                     )
                 ),
-                actions=[ft.TextButton("Cerrar", on_click=close_dialog)],
+                actions=[ft.TextButton(strings()["dialog_close"], on_click=close_dialog)],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
             page.open(result_dialog)
@@ -225,94 +396,58 @@ def main(page: ft.Page) -> None:
         nonlocal confirm_dialog
         confirm_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Confirmar instalacion"),
+            title=ft.Text(strings()["dialog_confirm_title"]),
             content=ft.Text(
                 "\n".join(
                     [
-                        f"Se copiaran los archivos de '{VARIANT_LABELS[variant_name]}' en:",
+                        format_text("dialog_confirm_intro", variant=variant_label(variant_name)),
                         "",
                         str(install_root),
                         "",
-                        "Los archivos existentes se sobrescribiran si ya estan presentes.",
+                        strings()["dialog_confirm_overwrite"],
                     ]
                 )
             ),
             actions=[
-                ft.TextButton("Cancelar", on_click=close_dialog),
-                ft.FilledButton("Instalar", on_click=execute_install),
+                ft.TextButton(strings()["dialog_cancel"], on_click=close_dialog),
+                ft.FilledButton(strings()["dialog_install"], on_click=execute_install),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        show_snackbar("Preparando instalacion...")
+        show_snackbar(strings()["snackbar_preparing"])
         page.open(confirm_dialog)
 
     install_button.on_click = confirm_install
+    browse_button.on_click = browse_install_path
+    autodetect_button.on_click = autodetect_install_path
+    kofi_button.on_click = lambda _: page.launch_url(KO_FI_URL)
 
-    variant_cards = []
-    for variant_name in available_variants:
-        variant_cards.append(
-            ft.Container(
-                content=ft.Row(
-                    controls=[
-                        ft.Radio(value=variant_name),
-                        ft.Column(
-                            controls=[
-                                ft.Text(VARIANT_LABELS[variant_name], weight=ft.FontWeight.W_600, size=15),
-                                ft.Text(
-                                    VARIANT_DESCRIPTIONS[variant_name],
-                                    size=12,
-                                    color="#B8C0C7",
-                                ),
-                            ],
-                            spacing=4,
-                            expand=True,
-                        ),
-                    ],
-                    vertical_alignment=ft.CrossAxisAlignment.START,
-                ),
-                border=ft.border.all(1, "#2C3138"),
-                border_radius=12,
-                padding=14,
-                bgcolor="#171B20",
-            )
-        )
-
-    variant_group.content.controls = variant_cards
+    apply_ui_language()
+    refresh_variant_cards(selected_language)
+    language_dropdown.on_change = handle_language_change
 
     page.add(
         ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text(
-                        "Instalador de traduccion al espanol para Star Citizen",
-                        size=28,
-                        weight=ft.FontWeight.BOLD,
-                    ),
-                    ft.Text(
-                        "Detecta la carpeta del juego, permite elegir la combinacion de overlays y copia los archivos sobre la instalacion existente.",
-                        size=14,
-                        color="#C7CDD3",
-                    ),
+                    headline_text,
+                    subheadline_text,
                     ft.Container(height=8),
                     ft.Container(
                         content=ft.Column(
                             controls=[
-                                ft.Text("Instalacion", size=18, weight=ft.FontWeight.W_600),
+                                install_section_text,
+                                language_dropdown,
                                 ft.Row(
                                     controls=[
                                         path_field,
-                                        ft.OutlinedButton("Examinar", icon=ft.Icons.FOLDER_OPEN, on_click=browse_install_path),
+                                        browse_button,
                                     ],
                                 ),
                                 ft.Row(
                                     controls=[
-                                        ft.Text(
-                                            "Acepta la carpeta LIVE directamente o la raiz de StarCitizen si contiene LIVE/EPTU/PTU.",
-                                            size=12,
-                                            color="#AAB3BB",
-                                            expand=True,
-                                        ),
-                                        ft.TextButton("Autodetectar", icon=ft.Icons.MY_LOCATION, on_click=autodetect_install_path),
+                                        path_help_text,
+                                        autodetect_button,
                                     ],
                                 ),
                                 permission_text,
@@ -327,7 +462,7 @@ def main(page: ft.Page) -> None:
                     ft.Container(
                         content=ft.Column(
                             controls=[
-                                ft.Text("Contenido a instalar", size=18, weight=ft.FontWeight.W_600),
+                                content_section_text,
                                 variant_group,
                             ],
                             spacing=12,
@@ -340,7 +475,7 @@ def main(page: ft.Page) -> None:
                     ft.Container(
                         content=ft.Column(
                             controls=[
-                                ft.Text("Estado", size=18, weight=ft.FontWeight.W_600),
+                                status_section_text,
                                 status_text,
                             ],
                             spacing=8,
@@ -355,6 +490,14 @@ def main(page: ft.Page) -> None:
                             progress_ring,
                         ],
                         alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        controls=[
+                            footer_text,
+                            kofi_button,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                 ],

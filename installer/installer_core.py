@@ -8,6 +8,8 @@ import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.language_support import StagedLanguage, discover_staged_languages
+
 try:
     import winreg
 except ImportError:  # pragma: no cover - solo aplica en Windows
@@ -16,17 +18,26 @@ except ImportError:  # pragma: no cover - solo aplica en Windows
 
 CHANNELS = ("LIVE", "EPTU", "PTU")
 DEFAULT_VARIANT = "base"
-VARIANT_LABELS = {
-    "base": "Solo traduccion",
-    "componentes": "Traduccion + nombres de componentes",
-    "blueprints": "Traduccion + marcas [BP]",
-    "componentes-blueprints": "Traduccion + componentes + [BP]",
-}
+VARIANT_IDS = (
+    "base",
+    "componentes",
+    "blueprints",
+    "componentes-blueprints",
+)
 
 
 @dataclass(frozen=True)
 class AssetBundle:
     version: str
+    root: Path
+    languages: dict[str, "LanguageBundle"]
+
+
+@dataclass(frozen=True)
+class LanguageBundle:
+    code: str
+    label: str
+    game_language: str
     root: Path
     variants: dict[str, Path]
 
@@ -37,27 +48,27 @@ def _installer_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _variant_global_ini_path(variant_dir: Path) -> Path:
-    return variant_dir / "data" / "Localization" / "spanish_(spain)" / "global.ini"
+def _variant_global_ini_path(variant_dir: Path, game_language: str) -> Path:
+    return variant_dir / "data" / "Localization" / game_language / "global.ini"
 
 
-def _is_valid_variant_dir(path: Path) -> bool:
-    return (path / "user.cfg").is_file() and _variant_global_ini_path(path).is_file()
+def _is_valid_variant_dir(path: Path, game_language: str) -> bool:
+    return (path / "user.cfg").is_file() and _variant_global_ini_path(path, game_language).is_file()
 
 
 def discover_asset_bundle() -> AssetBundle:
     bundled_root = _installer_base_dir() / "installer_assets"
     if bundled_root.is_dir():
-        variants = discover_variants(bundled_root)
-        if variants:
-            return AssetBundle(version=read_bundle_version(bundled_root), root=bundled_root, variants=variants)
+        languages = discover_languages(bundled_root)
+        if languages:
+            return AssetBundle(version=read_bundle_version(bundled_root), root=bundled_root, languages=languages)
 
     dist_root = _installer_base_dir() / "dist"
     candidates: list[tuple[float, Path]] = []
     if dist_root.is_dir():
         for version_dir in dist_root.iterdir():
             staging_dir = version_dir / "staging"
-            if staging_dir.is_dir() and discover_variants(staging_dir):
+            if staging_dir.is_dir() and discover_languages(staging_dir):
                 candidates.append((version_dir.stat().st_mtime, version_dir))
 
     if not candidates:
@@ -70,17 +81,33 @@ def discover_asset_bundle() -> AssetBundle:
     return AssetBundle(
         version=selected_version_dir.name,
         root=staging_dir,
-        variants=discover_variants(staging_dir),
+        languages=discover_languages(staging_dir),
     )
 
 
-def discover_variants(root: Path) -> dict[str, Path]:
+def discover_variants(root: Path, *, game_language: str) -> dict[str, Path]:
     variants: dict[str, Path] = {}
-    for variant_name in VARIANT_LABELS:
+    for variant_name in VARIANT_IDS:
         variant_dir = root / variant_name
-        if _is_valid_variant_dir(variant_dir):
+        if _is_valid_variant_dir(variant_dir, game_language):
             variants[variant_name] = variant_dir
     return variants
+
+
+def discover_languages(root: Path) -> dict[str, LanguageBundle]:
+    languages: dict[str, LanguageBundle] = {}
+    for staged_language in discover_staged_languages(root):
+        variants = discover_variants(staged_language.root, game_language=staged_language.game_language)
+        if not variants:
+            continue
+        languages[staged_language.code] = LanguageBundle(
+            code=staged_language.code,
+            label=staged_language.label,
+            game_language=staged_language.game_language,
+            root=staged_language.root,
+            variants=variants,
+        )
+    return languages
 
 
 def read_bundle_version(root: Path) -> str:
@@ -219,8 +246,8 @@ def path_requires_admin(path: str | Path) -> bool:
     return False
 
 
-def install_variant(*, variant_dir: Path, install_root: Path) -> list[Path]:
-    if not _is_valid_variant_dir(variant_dir):
+def install_variant(*, variant_dir: Path, install_root: Path, game_language: str) -> list[Path]:
+    if not _is_valid_variant_dir(variant_dir, game_language):
         raise FileNotFoundError(f"El paquete seleccionado no es valido: {variant_dir}")
 
     try:

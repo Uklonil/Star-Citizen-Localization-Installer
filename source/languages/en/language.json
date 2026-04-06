@@ -1,0 +1,10 @@
+{
+  "code": "en",
+  "label": "English",
+  "game_language": "english",
+  "translation_memory": "translation.ini",
+  "modified_overlay": "overlays/modified_global.ini",
+  "components_overlay": "overlays/components.ini",
+  "blueprints_overlay": "overlays/blueprints.ini",
+  "use_english_source_as_base": true
+}

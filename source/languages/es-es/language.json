@@ -1,0 +1,11 @@
+{
+  "code": "es-es",
+  "label": "Espanol (Espana)",
+  "game_language": "spanish_(spain)",
+  "translation_memory": "translation.ini",
+  "modified_overlay": "overlays/modified_global.ini",
+  "components_overlay": "overlays/components.ini",
+  "blueprints_overlay": "overlays/blueprints.ini",
+  "user_cfg": "user.cfg",
+  "use_english_source_as_base": false
+}
