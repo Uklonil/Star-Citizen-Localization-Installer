@@ -1,7 +1,7 @@
 dist/
 dist-installer/
 build/
-input/
+translation-batches/
 *.zip
 venv/
 .installer-venv/
