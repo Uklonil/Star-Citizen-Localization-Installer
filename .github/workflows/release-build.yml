@@ -7,6 +7,11 @@ on:
         description: "Version to build and publish, for example 4.7.1-live.11592622"
         required: true
         type: string
+      english_global_ini:
+        description: "Path to the extracted English global.ini committed in the repo"
+        required: false
+        default: "input/current/global.ini"
+        type: string
 
 permissions:
   contents: write
@@ -21,6 +26,7 @@ jobs:
 
     env:
       BUILD_VERSION: ${{ github.event.inputs.version }}
+      ENGLISH_GLOBAL_INI: ${{ github.event.inputs.english_global_ini }}
 
     steps:
       - name: Checkout repository
@@ -33,10 +39,17 @@ jobs:
           cache: "pip"
           cache-dependency-path: installer/requirements-build.txt
 
+      - name: Check required English global.ini exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:ENGLISH_GLOBAL_INI")) {
+            Write-Error "Missing required file '$env:ENGLISH_GLOBAL_INI' in the repository checkout. Extract it locally first and commit/push it before running this workflow."
+          }
+
       - name: Build distribution packages
         shell: pwsh
         run: |
-          python .\scripts\build_distributions.py --version "$env:BUILD_VERSION"
+          python .\scripts\build_distributions.py --english-global-ini "$env:ENGLISH_GLOBAL_INI" --version "$env:BUILD_VERSION"
 
       - name: Create installer virtual environment
         shell: pwsh
