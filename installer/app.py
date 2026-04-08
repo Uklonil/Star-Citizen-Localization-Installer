@@ -257,8 +257,13 @@ def main(page: ft.Page) -> None:
 
     def show_snackbar(message: str, *, error: bool = False) -> None:
         page.snack_bar = ft.SnackBar(
-            content=ft.Text(message),
-            bgcolor="#7F1D1D" if error else "#24323E",
+            content=ft.Text(
+                message,
+                color="#F7FAFC",
+                size=13,
+            ),
+            bgcolor="#8B1E1E" if error else "#1F4A63",
+            behavior=ft.SnackBarBehavior.FLOATING,
         )
         page.open(page.snack_bar)
 
