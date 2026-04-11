@@ -27,6 +27,17 @@ class MergeResult:
 
 
 REFERENCE_TOKEN_RE = re.compile(r"@([A-Za-z0-9_.,-]+)@")
+RICH_PUNCTUATION_REPLACEMENTS = {
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2026": "...",
+    "\u00a0": " ",
+    "\u202f": " ",
+    "\u2013": "-",
+    "\u2014": "-",
+}
 
 
 def resolve_path(path: str | Path) -> Path:
@@ -71,6 +82,19 @@ def write_global_ini(entries: Iterable[Entry], path: str | Path) -> None:
     with absolute_path.open("w", encoding="utf-8-sig", newline="") as file_handle:
         file_handle.write("\r\n".join(lines))
         file_handle.write("\r\n")
+
+
+def normalize_rich_punctuation(value: str) -> str:
+    normalized = value
+    for source, target in RICH_PUNCTUATION_REPLACEMENTS.items():
+        normalized = normalized.replace(source, target)
+    return normalized
+
+
+def normalize_global_ini_data(data: GlobalIniData) -> GlobalIniData:
+    entries = [Entry(key=entry.key, value=normalize_rich_punctuation(entry.value)) for entry in data.entries]
+    mapping = {entry.key: entry.value for entry in entries}
+    return GlobalIniData(entries=entries, mapping=mapping)
 
 
 def resolve_reference_tokens(

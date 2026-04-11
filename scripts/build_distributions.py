@@ -21,6 +21,7 @@ from localization_tools import (
     apply_overlay,
     apply_replacement_overlay,
     merge_translations,
+    normalize_global_ini_data,
     read_global_ini,
     resolve_reference_map,
     resolve_path,
@@ -69,8 +70,8 @@ def validate_reference_map(
     if unknown_keys:
         sample = ", ".join(unknown_keys[:10])
         errors.append(
-            f"{label}: contiene {len(unknown_keys)} claves que no existen en el global.ini ingles. "
-            f"Ejemplos: {sample}"
+            f"{label}: contains {len(unknown_keys)} keys that do not exist in the English global.ini. "
+            f"Examples: {sample}"
         )
 
     for key, candidate_value in candidate_map.items():
@@ -89,7 +90,7 @@ def validate_reference_map(
             else candidate_tokens == english_tokens
         )
         if not tokens_valid:
-            errors.append(f"{label}: placeholders o markup alterados en la clave {key}")
+            errors.append(f"{label}: placeholders or markup altered in key {key}")
 
     return errors
 
@@ -101,7 +102,7 @@ def validate_output_entries(*, english_entries, output_entries, label: str) -> l
 
     if len(english_entries) != len(output_entries):
         errors.append(
-            f"{label}: el numero de entradas no coincide con el origen "
+            f"{label}: the number of entries does not match the source "
             f"({len(output_entries)} vs {len(english_entries)})"
         )
         return errors
@@ -109,7 +110,7 @@ def validate_output_entries(*, english_entries, output_entries, label: str) -> l
     for index, (english_entry, output_entry) in enumerate(zip(english_entries, output_entries), start=1):
         if english_entry.key != output_entry.key:
             errors.append(
-                f"{label}: cambio de clave u orden en la linea {index}: "
+                f"{label}: change of key or order in line {index}: "
                 f"{english_entry.key} -> {output_entry.key}"
             )
             continue
@@ -154,9 +155,9 @@ def create_package(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Genera las distribuciones ZIP de localizacion por idioma.")
+    parser = argparse.ArgumentParser(description="Generates ZIP distributions for localization by language.")
     parser.add_argument("--english-global-ini", default="input/current/global.ini")
-    parser.add_argument("--language", help="Codigo de idioma a compilar. Si se omite, compila todos los configurados.")
+    parser.add_argument("--language", help="Language code to compile. If omitted, compiles all configured languages.")
     parser.add_argument("--translation-memory")
     parser.add_argument("--modified-overlay")
     parser.add_argument("--components-overlay")
@@ -167,7 +168,7 @@ def main() -> int:
     parser.add_argument(
         "--allow-empty-translation-memory",
         action="store_true",
-        help="Permite generar paquetes aunque la memoria maestra no aporte ninguna traduccion base.",
+        help="Allows generating packages even if the master memory does not provide any base translations.",
     )
     args = parser.parse_args()
 
@@ -175,9 +176,9 @@ def main() -> int:
     output_absolute = resolve_path(args.output_root)
 
     if not english_absolute.exists():
-        raise FileNotFoundError(f"Falta un archivo requerido: {english_absolute}")
+        raise FileNotFoundError(f"Required file missing: {english_absolute}")
 
-    english_data = read_global_ini(english_absolute)
+    english_data = normalize_global_ini_data(read_global_ini(english_absolute))
     version_root = output_absolute / args.version
     packages_root = version_root / "packages"
     staging_root = version_root / "staging"
@@ -200,16 +201,23 @@ def main() -> int:
 
         for required_path in (modified_absolute, components_absolute, blueprints_absolute):
             if not required_path.exists():
-                raise FileNotFoundError(f"Falta un archivo requerido para {language.code}: {required_path}")
-        if translation_absolute is not None and not translation_absolute.exists():
-            raise FileNotFoundError(f"Falta un archivo requerido para {language.code}: {translation_absolute}")
+                raise FileNotFoundError(f"Required file missing for {language.code}: {required_path}")
+        if (
+            translation_absolute is not None
+            and not translation_absolute.exists()
+            and not language.use_english_source_as_base
+        ):
+            raise FileNotFoundError(f"Required file missing for {language.code}: {translation_absolute}")
         if user_cfg_absolute is not None and not user_cfg_absolute.exists():
-            raise FileNotFoundError(f"Falta un archivo requerido para {language.code}: {user_cfg_absolute}")
+            raise FileNotFoundError(f"Required file missing for {language.code}: {user_cfg_absolute}")
 
         if translation_absolute is None:
             translation_data = read_global_ini(english_absolute)
             translation_map: dict[str, str] = {}
-        elif translation_absolute.stat().st_size == 0 and language.use_english_source_as_base:
+        elif translation_absolute is not None and translation_absolute.exists() and translation_absolute.stat().st_size == 0 and language.use_english_source_as_base:
+            translation_data = read_global_ini(english_absolute)
+            translation_map = {}
+        elif translation_absolute is not None and not translation_absolute.exists() and language.use_english_source_as_base:
             translation_data = read_global_ini(english_absolute)
             translation_map = {}
         else:
@@ -238,7 +246,7 @@ def main() -> int:
                 validate_reference_map(
                     english_map=english_data.mapping,
                     candidate_map=translation_map,
-                    label=f"Memoria maestra {language.code}",
+                    label=f"Master memory {language.code}",
                 )
             )
         validation_errors.extend(
@@ -268,18 +276,18 @@ def main() -> int:
         if missing_component_refs:
             sample = ", ".join(sorted(missing_component_refs)[:10])
             validation_errors.append(
-                f"Overlay components.ini {language.code}: referencias @KEY@ sin resolver ({len(missing_component_refs)}). Ejemplos: {sample}"
+                f"Overlay components.ini {language.code}: @KEY@ references not resolved ({len(missing_component_refs)}). Examples: {sample}"
             )
         if missing_blueprint_refs:
             sample = ", ".join(sorted(missing_blueprint_refs)[:10])
             validation_errors.append(
-                f"Overlay blueprints.ini {language.code}: referencias @KEY@ sin resolver ({len(missing_blueprint_refs)}). Ejemplos: {sample}"
+                f"Overlay blueprints.ini {language.code}: @KEY@ references not resolved ({len(missing_blueprint_refs)}). Examples: {sample}"
             )
 
         matched_translation_keys = len(set(translation_map) & set(english_data.mapping))
         if matched_translation_keys == 0 and not language.use_english_source_as_base and not args.allow_empty_translation_memory:
             validation_errors.append(
-                f"La memoria maestra de {language.code} no contiene ninguna clave traducida que coincida con el global.ini actual."
+                f"The master memory for {language.code} does not contain any translated keys that match the current global.ini."
             )
 
         base_merge = merge_translations(english_data=english_data, translation_map=translation_map)
@@ -333,24 +341,23 @@ def main() -> int:
         summary_lines.extend(
             (
                 "",
-                f"Idioma: {language.code} ({language.label})",
-                f"Total de claves del parche: {base_merge.total_count}",
-                f"Claves presentes en memoria maestra: {matched_translation_keys}",
-                f"Claves con traduccion encontrada: {base_merge.total_count - reported_missing_count}",
-                f"Claves pendientes de traducir: {reported_missing_count}",
+                f"# Language: `{language.code}` ({language.label})",
+                f"Total of patch keys: {base_merge.total_count}",
+                f"Keys present in master memory: {matched_translation_keys}",
+                f"Keys with found translation: {base_merge.total_count - reported_missing_count}",
+                f"Keys pending translation: {reported_missing_count}",
             )
         )
 
     summary_lines.append("")
-    summary_lines.append(f"Paquetes generados en: {packages_root}")
 
     summary_path = reports_root / "summary.txt"
     with summary_path.open("w", encoding="utf-8", newline="\n") as file_handle:
         file_handle.write("\n".join(summary_lines))
 
-    print(f"Build completado para version {args.version}")
-    print(f"Pendientes de traducir: {total_missing}")
-    print(f"Paquetes: {packages_root}")
+    print(f"Completed build for version {args.version}")
+    print(f"Pending translations: {total_missing}")
+    print(f"Packages: {packages_root}")
     return 0
 
 
