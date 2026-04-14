@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import string
+import subprocess
 import sys
 import ctypes
 from dataclasses import dataclass
@@ -24,6 +25,30 @@ VARIANT_IDS = (
     "blueprints",
     "componentes-blueprints",
 )
+
+SEE_MASK_NOCLOSEPROCESS = 0x00000040
+INFINITE = 0xFFFFFFFF
+ERROR_CANCELLED = 1223
+
+
+class SHELLEXECUTEINFOW(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_ulong),
+        ("fMask", ctypes.c_ulong),
+        ("hwnd", ctypes.c_void_p),
+        ("lpVerb", ctypes.c_wchar_p),
+        ("lpFile", ctypes.c_wchar_p),
+        ("lpParameters", ctypes.c_wchar_p),
+        ("lpDirectory", ctypes.c_wchar_p),
+        ("nShow", ctypes.c_int),
+        ("hInstApp", ctypes.c_void_p),
+        ("lpIDList", ctypes.c_void_p),
+        ("lpClass", ctypes.c_wchar_p),
+        ("hkeyClass", ctypes.c_void_p),
+        ("dwHotKey", ctypes.c_ulong),
+        ("hIconOrMonitor", ctypes.c_void_p),
+        ("hProcess", ctypes.c_void_p),
+    ]
 
 
 @dataclass(frozen=True)
@@ -226,6 +251,38 @@ def is_running_as_admin() -> bool:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         return False
+
+
+def run_elevated_process(*, executable_path: Path, arguments: list[str], working_directory: Path | None = None) -> int:
+    execute_info = SHELLEXECUTEINFOW()
+    execute_info.cbSize = ctypes.sizeof(SHELLEXECUTEINFOW)
+    execute_info.fMask = SEE_MASK_NOCLOSEPROCESS
+    execute_info.hwnd = None
+    execute_info.lpVerb = "runas"
+    execute_info.lpFile = str(executable_path)
+    execute_info.lpParameters = subprocess.list2cmdline(arguments)
+    execute_info.lpDirectory = str(working_directory) if working_directory is not None else None
+    execute_info.nShow = 1
+
+    if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(execute_info)):
+        error_code = ctypes.GetLastError()
+        if error_code == ERROR_CANCELLED:
+            raise PermissionError("La elevacion fue cancelada por el usuario.")
+        raise OSError(f"No se pudo iniciar el proceso elevado. Codigo Win32: {error_code}")
+
+    process_handle = execute_info.hProcess
+    if not process_handle:
+        raise OSError("No se pudo obtener el handle del proceso elevado.")
+
+    try:
+        ctypes.windll.kernel32.WaitForSingleObject(process_handle, INFINITE)
+        exit_code = ctypes.c_ulong()
+        if not ctypes.windll.kernel32.GetExitCodeProcess(process_handle, ctypes.byref(exit_code)):
+            error_code = ctypes.GetLastError()
+            raise OSError(f"No se pudo leer el codigo de salida del proceso elevado. Codigo Win32: {error_code}")
+        return int(exit_code.value)
+    finally:
+        ctypes.windll.kernel32.CloseHandle(process_handle)
 
 
 def path_requires_admin(path: str | Path) -> bool:

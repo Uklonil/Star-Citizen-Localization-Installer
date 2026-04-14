@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import argparse
+import ctypes
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import flet as ft
@@ -22,6 +25,7 @@ try:
         is_running_as_admin,
         normalize_install_path,
         path_requires_admin,
+        run_elevated_process,
     )
 except ImportError:
     current_dir = Path(__file__).resolve().parent
@@ -41,6 +45,7 @@ except ImportError:
             is_running_as_admin,
             normalize_install_path,
             path_requires_admin,
+            run_elevated_process,
         )
     except ImportError:
         from installer_core import (
@@ -53,11 +58,13 @@ except ImportError:
             is_running_as_admin,
             normalize_install_path,
             path_requires_admin,
+            run_elevated_process,
         )
 
 DEFAULT_UI_LANGUAGE = "en"
 _UI_CACHE: dict[str, dict[str, str]] = {}
 KO_FI_URL = "https://ko-fi.com/uklonil"
+FONT_FAMILY = "Orbitron"
 
 
 def _app_base_dir() -> Path:
@@ -72,6 +79,10 @@ def _ui_texts_dir() -> Path:
 
 def _assets_dir() -> Path:
     return _app_base_dir() / "installer" / "assets"
+
+
+def _orbitron_font_path() -> Path:
+    return _assets_dir() / "Orbitron-VariableFont_wght.ttf"
 
 
 def _load_ui_text_file(language_code: str) -> dict[str, str]:
@@ -107,19 +118,64 @@ def load_ui_strings(language_code: str) -> dict[str, str]:
     return merged
 
 
+def _show_message_box(title: str, message: str, *, error: bool = False) -> None:
+    style = 0x10 if error else 0x40
+    ctypes.windll.user32.MessageBoxW(None, message, title, style)
+
+
+def run_elevated_install_mode(args: argparse.Namespace) -> int:
+    ui_language = args.ui_language or args.language
+    ui_strings = load_ui_strings(ui_language)
+
+    try:
+        bundle = discover_asset_bundle()
+        selected_language = bundle.languages[args.language]
+        variant_dir = selected_language.variants[args.variant]
+        install_root = normalize_install_path(args.install_path)
+        copied_files = install_variant(
+            variant_dir=variant_dir,
+            install_root=install_root,
+            game_language=selected_language.game_language,
+        )
+        result = {
+            "ok": True,
+            "version": bundle.version,
+            "language": selected_language.label,
+            "variant": args.variant,
+            "path": str(install_root),
+            "copied_files": [str(path) for path in copied_files],
+        }
+    except Exception as exc:
+        result = {
+            "ok": False,
+            "error": str(exc),
+        }
+
+    if args.result_file:
+        Path(args.result_file).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+
+    if not args.result_file and not result["ok"]:
+        _show_message_box(ui_strings["dialog_install_failed_title"], result["error"], error=True)
+
+    return 0 if result["ok"] else 1
+
+
 def main(page: ft.Page) -> None:
     bundle = discover_asset_bundle()
     window_icon = _assets_dir() / "app-icon.ico"
     if window_icon.is_file():
         page.window.icon = str(window_icon)
+    orbitron_font = _orbitron_font_path()
+    if orbitron_font.is_file():
+        page.fonts = {FONT_FAMILY: str(orbitron_font)}
     page.theme_mode = ft.ThemeMode.DARK
-    page.padding = 24
+    page.padding = 0
     page.window.width = 920
     page.window.height = 760
     page.window.resizable = False
     page.window.maximizable = False
-    page.theme = ft.Theme(color_scheme_seed=ft.Colors.PURPLE)
-    page.bgcolor = "#111315"
+    page.theme = ft.Theme(color_scheme_seed=ft.Colors.ORANGE, font_family=FONT_FAMILY)
+    page.bgcolor = "#04050A"
     page.scroll = ft.ScrollMode.AUTO
 
     available_languages = list(bundle.languages.values())
@@ -134,28 +190,43 @@ def main(page: ft.Page) -> None:
     status_text = ft.Text(
         value="",
         size=13,
-        color="#C7CDD3",
+        color="#D6DEE8",
+        font_family=FONT_FAMILY,
     )
-    permission_text = ft.Text(size=12, color="#AAB3BB")
-    progress_ring = ft.ProgressRing(width=18, height=18, stroke_width=2, visible=False)
+    permission_text = ft.Text(size=12, color="#AAB3BB", font_family=FONT_FAMILY)
+    progress_ring = ft.ProgressRing(width=18, height=18, stroke_width=2, visible=False, color="#FFAA2B")
     path_field = ft.TextField(
         label="",
         hint_text="",
         expand=True,
         autofocus=True,
+        border_color="#5A3A14",
+        focused_border_color="#FF9A1F",
+        bgcolor="#0C1018",
+        color="#F5F7FA",
+        cursor_color="#FFB347",
+        label_style=ft.TextStyle(font_family=FONT_FAMILY, color="#FFB347", size=12),
+        hint_style=ft.TextStyle(font_family=FONT_FAMILY, color="#697488", size=12),
+        text_style=ft.TextStyle(font_family=FONT_FAMILY, color="#F5F7FA", size=13),
     )
-    headline_text = ft.Text(size=28, weight=ft.FontWeight.BOLD)
-    subheadline_text = ft.Text(size=14, color="#C7CDD3")
-    install_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600)
-    path_help_text = ft.Text(size=12, color="#AAB3BB", expand=True)
-    content_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600)
-    status_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600)
-    footer_text = ft.Text(size=12, color="#8E98A1")
+    headline_text = ft.Text(size=28, weight=ft.FontWeight.BOLD, font_family=FONT_FAMILY, color="#FFF3D8")
+    subheadline_text = ft.Text(size=14, color="#C7CDD3", font_family=FONT_FAMILY)
+    install_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY, color="#FFBF5A")
+    path_help_text = ft.Text(size=12, color="#93A0B4", expand=True, font_family=FONT_FAMILY)
+    content_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY, color="#FFBF5A")
+    status_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY, color="#FFBF5A")
+    footer_text = ft.Text(size=11, color="#77849A", font_family=FONT_FAMILY)
     language_dropdown = ft.Dropdown(
         label="",
         value=default_language.code,
         options=[ft.dropdown.Option(language.code, language.label) for language in available_languages],
         width=260,
+        bgcolor="#0C1018",
+        border_color="#5A3A14",
+        focused_border_color="#FF9A1F",
+        color="#F5F7FA",
+        label_style=ft.TextStyle(font_family=FONT_FAMILY, color="#FFB347", size=12),
+        text_style=ft.TextStyle(font_family=FONT_FAMILY, color="#F5F7FA", size=13),
     )
     variant_group = ft.RadioGroup(
         content=ft.Column(spacing=10),
@@ -164,12 +235,81 @@ def main(page: ft.Page) -> None:
     install_button = ft.FilledButton(
         text="",
         icon=ft.Icons.DOWNLOAD_DONE,
+        style=ft.ButtonStyle(
+            bgcolor={"default": "#FF8E1A", "disabled": "#5C4A2E"},
+            color={"default": "#091018", "disabled": "#D4B48A"},
+            text_style=ft.TextStyle(font_family=FONT_FAMILY, size=14, weight=ft.FontWeight.W_700),
+            shape=ft.RoundedRectangleBorder(radius=10),
+            padding=18,
+        ),
     )
-    browse_button = ft.OutlinedButton("", icon=ft.Icons.FOLDER_OPEN)
-    autodetect_button = ft.TextButton("", icon=ft.Icons.MY_LOCATION)
-    kofi_button = ft.TextButton(icon=ft.Icons.OPEN_IN_NEW)
+    browse_button = ft.OutlinedButton(
+        "",
+        icon=ft.Icons.FOLDER_OPEN,
+        style=ft.ButtonStyle(
+            color="#FFD18A",
+            side={"default": ft.BorderSide(1, "#7A4B14")},
+            text_style=ft.TextStyle(font_family=FONT_FAMILY, size=12, weight=ft.FontWeight.W_600),
+            shape=ft.RoundedRectangleBorder(radius=10),
+        ),
+    )
+    autodetect_button = ft.TextButton(
+        "",
+        icon=ft.Icons.MY_LOCATION,
+        style=ft.ButtonStyle(
+            color="#7FD2FF",
+            text_style=ft.TextStyle(font_family=FONT_FAMILY, size=12, weight=ft.FontWeight.W_600),
+        ),
+    )
+    kofi_button = ft.TextButton(
+        icon=ft.Icons.OPEN_IN_NEW,
+        style=ft.ButtonStyle(
+            color="#FFB347",
+            text_style=ft.TextStyle(font_family=FONT_FAMILY, size=12, weight=ft.FontWeight.W_600),
+        ),
+    )
     confirm_dialog: ft.AlertDialog | None = None
     result_dialog: ft.AlertDialog | None = None
+
+    def panel(title: ft.Text, content: ft.Control) -> ft.Container:
+        return ft.Container(
+            content=ft.Column(
+                controls=[title, content],
+                spacing=12,
+            ),
+            padding=18,
+            border_radius=18,
+            border=ft.border.all(1, "#3C4658"),
+            bgcolor="#0A0E16",
+            gradient=ft.LinearGradient(
+                begin=ft.alignment.top_left,
+                end=ft.alignment.bottom_right,
+                colors=["#111722", "#090C13"],
+            ),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=16,
+                color="#33000000",
+                offset=ft.Offset(0, 8),
+            ),
+        )
+
+    def frame_accent(width: float, height: float, *, top: float | None = None, left: float | None = None, right: float | None = None, bottom: float | None = None, color: str = "#FF9A1F") -> ft.Container:
+        return ft.Container(
+            width=width,
+            height=height,
+            top=top,
+            left=left,
+            right=right,
+            bottom=bottom,
+            border_radius=6,
+            bgcolor=color,
+            shadow=ft.BoxShadow(
+                blur_radius=18,
+                spread_radius=0,
+                color=color,
+            ),
+        )
 
     def format_text(key: str, **kwargs: object) -> str:
         return strings()[key].format(**kwargs)
@@ -179,6 +319,34 @@ def main(page: ft.Page) -> None:
 
     def variant_description(variant_name: str) -> str:
         return strings()[f"variant_{variant_name.replace('-', '_')}_desc"]
+
+    def show_result_dialog(*, version: str, language: str, variant_name: str, install_root: Path, copied_files: list[str]) -> None:
+        copied_preview = "\n".join(copied_files[:6])
+        if len(copied_files) > 6:
+            copied_preview += "\n" + format_text("dialog_result_more", count=len(copied_files) - 6)
+
+        nonlocal result_dialog
+        result_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(strings()["dialog_install_done_title"]),
+            content=ft.Text(
+                "\n".join(
+                    [
+                        format_text("dialog_result_version", version=version),
+                        format_text("dialog_result_language", language=language),
+                        format_text("dialog_result_destination", path=install_root),
+                        format_text("dialog_result_variant", variant=variant_label(variant_name)),
+                        format_text("dialog_result_files", count=len(copied_files)),
+                        "",
+                        copied_preview,
+                    ]
+                )
+            ),
+            actions=[ft.TextButton(strings()["dialog_close"], on_click=close_dialog, style=ft.ButtonStyle(text_style=ft.TextStyle(font_family=FONT_FAMILY)))],
+            actions_alignment=ft.MainAxisAlignment.END,
+            bgcolor="#0B0F17",
+        )
+        page.open(result_dialog)
 
     def apply_ui_language() -> None:
         page.title = strings()["window_title"]
@@ -201,18 +369,30 @@ def main(page: ft.Page) -> None:
         available = [name for name in VARIANT_IDS if name in language.variants]
         variant_cards = []
         for variant_name in available:
+            def select_variant(_: ft.ControlEvent, selected_variant: str = variant_name) -> None:
+                variant_group.value = selected_variant
+                page.update()
+
             variant_cards.append(
                 ft.Container(
+                    ink=True,
+                    on_click=select_variant,
                     content=ft.Row(
                         controls=[
                             ft.Radio(value=variant_name),
                             ft.Column(
                                 controls=[
-                                    ft.Text(variant_label(variant_name), weight=ft.FontWeight.W_600, size=15),
+                                    ft.Text(
+                                        variant_label(variant_name),
+                                        weight=ft.FontWeight.W_600,
+                                        size=15,
+                                        font_family=FONT_FAMILY,
+                                    ),
                                     ft.Text(
                                         variant_description(variant_name),
                                         size=12,
                                         color="#B8C0C7",
+                                        font_family=FONT_FAMILY,
                                     ),
                                 ],
                                 spacing=4,
@@ -261,6 +441,7 @@ def main(page: ft.Page) -> None:
                 message,
                 color="#F7FAFC",
                 size=13,
+                font_family=FONT_FAMILY,
             ),
             bgcolor="#8B1E1E" if error else "#1F4A63",
             behavior=ft.SnackBarBehavior.FLOATING,
@@ -351,6 +532,82 @@ def main(page: ft.Page) -> None:
                 page.close(confirm_dialog)
             set_busy(True, format_text("status_installing", variant=variant_label(variant_name), path=install_root))
 
+            if path_requires_admin(install_root) and not is_running_as_admin():
+                with tempfile.NamedTemporaryFile(
+                    prefix="sc-localization-install-",
+                    suffix=".json",
+                    delete=False,
+                ) as temp_handle:
+                    result_file = Path(temp_handle.name)
+                arguments = [
+                    "--elevated-install",
+                    "--language",
+                    selected_language.code,
+                    "--variant",
+                    variant_name,
+                    "--install-path",
+                    str(install_root),
+                    "--ui-language",
+                    selected_language.code,
+                    "--result-file",
+                    str(result_file),
+                ]
+                if not getattr(sys, "frozen", False):
+                    arguments.insert(0, str(Path(__file__).resolve()))
+
+                update_status(format_text("status_requesting_elevation", path=install_root))
+                try:
+                    exit_code = run_elevated_process(
+                        executable_path=Path(sys.executable),
+                        arguments=arguments,
+                        working_directory=_app_base_dir(),
+                    )
+                except PermissionError:
+                    update_status(strings()["status_elevation_cancelled"], error=True)
+                    show_snackbar(strings()["snackbar_elevation_cancelled"], error=True)
+                    set_busy(False)
+                    return
+                except Exception as exc:
+                    update_status(format_text("status_install_error", error=exc), error=True)
+                    show_snackbar(str(exc), error=True)
+                    set_busy(False)
+                    return
+
+                if not result_file.is_file():
+                    update_status(strings()["status_elevated_result_missing"], error=True)
+                    show_snackbar(strings()["status_elevated_result_missing"], error=True)
+                    set_busy(False)
+                    return
+
+                result_payload = json.loads(result_file.read_text(encoding="utf-8"))
+                result_file.unlink(missing_ok=True)
+
+                if exit_code != 0 or not result_payload.get("ok"):
+                    error_message = str(result_payload.get("error", strings()["status_elevated_result_missing"]))
+                    update_status(format_text("status_install_error", error=error_message), error=True)
+                    show_snackbar(error_message, error=True)
+                    set_busy(False)
+                    return
+
+                copied_files = [str(path) for path in result_payload.get("copied_files", [])]
+                set_busy(False)
+                update_status(
+                    format_text(
+                        "status_completed",
+                        path=install_root,
+                        variant=variant_name,
+                        count=len(copied_files),
+                    )
+                )
+                show_result_dialog(
+                    version=str(result_payload.get("version", bundle.version)),
+                    language=str(result_payload.get("language", selected_language.label)),
+                    variant_name=variant_name,
+                    install_root=install_root,
+                    copied_files=copied_files,
+                )
+                return
+
             try:
                 copied_files = install_variant(
                     variant_dir=variant_dir,
@@ -372,36 +629,18 @@ def main(page: ft.Page) -> None:
                     count=len(copied_files),
                 )
             )
-            copied_preview = "\n".join(str(path) for path in copied_files[:6])
-            if len(copied_files) > 6:
-                copied_preview += "\n" + format_text("dialog_result_more", count=len(copied_files) - 6)
-
-            nonlocal result_dialog
-            result_dialog = ft.AlertDialog(
-                modal=True,
-                title=ft.Text(strings()["dialog_install_done_title"]),
-                content=ft.Text(
-                    "\n".join(
-                        [
-                            format_text("dialog_result_version", version=bundle.version),
-                            format_text("dialog_result_language", language=selected_language.label),
-                            format_text("dialog_result_destination", path=install_root),
-                            format_text("dialog_result_variant", variant=variant_label(variant_name)),
-                            format_text("dialog_result_files", count=len(copied_files)),
-                            "",
-                            copied_preview,
-                        ]
-                    )
-                ),
-                actions=[ft.TextButton(strings()["dialog_close"], on_click=close_dialog)],
-                actions_alignment=ft.MainAxisAlignment.END,
+            show_result_dialog(
+                version=bundle.version,
+                language=selected_language.label,
+                variant_name=variant_name,
+                install_root=install_root,
+                copied_files=[str(path) for path in copied_files],
             )
-            page.open(result_dialog)
 
         nonlocal confirm_dialog
         confirm_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text(strings()["dialog_confirm_title"]),
+            title=ft.Text(strings()["dialog_confirm_title"], font_family=FONT_FAMILY, color="#FFD18A"),
             content=ft.Text(
                 "\n".join(
                     [
@@ -411,11 +650,14 @@ def main(page: ft.Page) -> None:
                         "",
                         strings()["dialog_confirm_overwrite"],
                     ]
-                )
+                ),
+                font_family=FONT_FAMILY,
+                color="#DDE6F2",
             ),
+            bgcolor="#0B0F17",
             actions=[
-                ft.TextButton(strings()["dialog_cancel"], on_click=close_dialog),
-                ft.FilledButton(strings()["dialog_install"], on_click=execute_install),
+                ft.TextButton(strings()["dialog_cancel"], on_click=close_dialog, style=ft.ButtonStyle(text_style=ft.TextStyle(font_family=FONT_FAMILY))),
+                ft.FilledButton(strings()["dialog_install"], on_click=execute_install, style=ft.ButtonStyle(text_style=ft.TextStyle(font_family=FONT_FAMILY, weight=ft.FontWeight.W_700))),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -433,88 +675,131 @@ def main(page: ft.Page) -> None:
 
     page.add(
         ft.Container(
-            content=ft.Column(
-                controls=[
-                    headline_text,
-                    subheadline_text,
-                    ft.Container(height=8),
-                    ft.Container(
-                        content=ft.Column(
-                            controls=[
-                                install_section_text,
-                                language_dropdown,
-                                ft.Row(
-                                    controls=[
-                                        path_field,
-                                        browse_button,
-                                    ],
-                                ),
-                                ft.Row(
-                                    controls=[
-                                        path_help_text,
-                                        autodetect_button,
-                                    ],
-                                ),
-                                permission_text,
-                            ],
-                            spacing=10,
-                        ),
-                        padding=18,
-                        border_radius=16,
-                        bgcolor="#171B20",
-                    ),
-                    ft.Container(height=4),
-                    ft.Container(
-                        content=ft.Column(
-                            controls=[
-                                content_section_text,
-                                variant_group,
-                            ],
-                            spacing=12,
-                        ),
-                        padding=18,
-                        border_radius=16,
-                        bgcolor="#171B20",
-                    ),
-                    ft.Container(height=4),
-                    ft.Container(
-                        content=ft.Column(
-                            controls=[
-                                status_section_text,
-                                status_text,
-                            ],
-                            spacing=8,
-                        ),
-                        padding=18,
-                        border_radius=16,
-                        bgcolor="#171B20",
-                    ),
-                    ft.Row(
+            expand=True,
+            padding=18,
+            bgcolor="#04050A",
+            content=ft.Container(
+                expand=True,
+                border_radius=26,
+                border=ft.border.all(2, "#272D3A"),
+                gradient=ft.LinearGradient(
+                    begin=ft.alignment.top_center,
+                    end=ft.alignment.bottom_center,
+                    colors=["#090B12", "#030409"],
+                ),
+                padding=10,
+                content=ft.Container(
+                    expand=True,
+                    border_radius=22,
+                    border=ft.border.all(1.2, "#8B5319"),
+                    padding=16,
+                    content=ft.Column(
                         controls=[
-                            install_button,
-                            progress_ring,
+                            ft.Row(
+                                controls=[
+                                    ft.Container(height=5, expand=3, border_radius=6, bgcolor="#39435A"),
+                                    ft.Container(height=5, expand=4, border_radius=6, gradient=ft.LinearGradient(colors=["#6A4A1E", "#FF9A1F", "#6A4A1E"])),
+                                    ft.Container(height=5, expand=3, border_radius=6, bgcolor="#39435A"),
+                                ],
+                                spacing=14,
+                            ),
+                            ft.Container(
+                                expand=True,
+                                border_radius=18,
+                                border=ft.border.all(1, "#3F2710"),
+                                padding=20,
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Column(
+                                                    controls=[
+                                                        headline_text,
+                                                        subheadline_text,
+                                                    ],
+                                                    spacing=6,
+                                                    expand=True,
+                                                ),
+                                                ft.Container(
+                                                    padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                                                    border_radius=10,
+                                                    bgcolor="#111824",
+                                                    border=ft.border.all(1, "#36506B"),
+                                                    content=ft.Text(
+                                                        f"PATCH {bundle.version}",
+                                                        font_family=FONT_FAMILY,
+                                                        size=11,
+                                                        color="#7FD2FF",
+                                                        weight=ft.FontWeight.W_700,
+                                                    ),
+                                                ),
+                                            ],
+                                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                            vertical_alignment=ft.CrossAxisAlignment.START,
+                                        ),
+                                        panel(
+                                            install_section_text,
+                                            ft.Column(
+                                                controls=[
+                                                    language_dropdown,
+                                                    ft.Row(
+                                                        controls=[
+                                                            path_field,
+                                                            browse_button,
+                                                        ],
+                                                    ),
+                                                    ft.Row(
+                                                        controls=[
+                                                            path_help_text,
+                                                            autodetect_button,
+                                                        ],
+                                                    ),
+                                                    permission_text,
+                                                ],
+                                                spacing=10,
+                                            ),
+                                        ),
+                                        panel(
+                                            content_section_text,
+                                            variant_group,
+                                        ),
+                                        panel(
+                                            status_section_text,
+                                            status_text,
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                install_button,
+                                                progress_ring,
+                                            ],
+                                            alignment=ft.MainAxisAlignment.START,
+                                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                footer_text,
+                                                kofi_button,
+                                            ],
+                                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Container(height=6, width=96, border_radius=6, bgcolor="#26A7FF"),
+                                                ft.Container(expand=True),
+                                                ft.Container(height=6, width=96, border_radius=6, bgcolor="#26A7FF"),
+                                            ],
+                                        ),
+                                    ],
+                                    spacing=18,
+                                    scroll=ft.ScrollMode.AUTO,
+                                ),
+                            ),
                         ],
-                        alignment=ft.MainAxisAlignment.START,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=14,
                     ),
-                    ft.Row(
-                        controls=[
-                            footer_text,
-                            kofi_button,
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                ],
-                spacing=18,
+                ),
             ),
-            width=840,
-            gradient=ft.LinearGradient(
-                begin=ft.alignment.top_left,
-                end=ft.alignment.bottom_right,
-                colors=["#16191C", "#0F1214"],
-            ),
-            padding=4,
         )
     )
 
@@ -522,4 +807,16 @@ def main(page: ft.Page) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--elevated-install", action="store_true")
+    parser.add_argument("--language")
+    parser.add_argument("--variant")
+    parser.add_argument("--install-path")
+    parser.add_argument("--ui-language")
+    parser.add_argument("--result-file")
+    cli_args, _ = parser.parse_known_args()
+
+    if cli_args.elevated_install:
+        raise SystemExit(run_elevated_install_mode(cli_args))
+
     ft.app(target=main)

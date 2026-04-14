@@ -1,3 +1,4 @@
 flet==0.28.3
 flet-desktop==0.28.3
 pyinstaller==6.19.0
+cryptography

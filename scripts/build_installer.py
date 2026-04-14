@@ -12,6 +12,7 @@ INSTALLER_ROOT = REPO_ROOT / "installer"
 BUILD_ROOT = REPO_ROOT / "build" / "installer"
 DIST_ROOT = REPO_ROOT / "dist"
 ICON_PATH = INSTALLER_ROOT / "assets" / "app-icon.ico"
+PYINSTALLER_DATA_PACKAGES = ("flet", "flet_desktop")
 
 
 def find_version_dir(version: str | None) -> Path:
@@ -54,7 +55,7 @@ def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name
     output_dir.mkdir(parents=True, exist_ok=True)
     ui_texts_root = INSTALLER_ROOT / "ui_texts"
     installer_assets_root = INSTALLER_ROOT / "assets"
-    command = [
+    command: list[str] = [
         sys.executable,
         "-m",
         "PyInstaller",
@@ -62,7 +63,6 @@ def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name
         "--clean",
         "--onefile",
         "--windowed",
-        "--uac-admin",
     ]
     if ICON_PATH.is_file():
         command.extend(
@@ -73,35 +73,30 @@ def run_pyinstaller(*, app_path: Path, assets_root: Path, output_dir: Path, name
         )
     command.extend(
         [
-        "--name",
-        name,
-        "--distpath",
-        str(output_dir),
-        "--workpath",
-        str(BUILD_ROOT / "work"),
-        "--specpath",
-        str(BUILD_ROOT / "spec"),
-        "--add-data",
-        f"{assets_root};installer_assets",
-        "--add-data",
-        f"{ui_texts_root};installer/ui_texts",
-        "--add-data",
-        f"{installer_assets_root};installer/assets",
-        "--hidden-import",
-        "installer.installer_core",
-        "--hidden-import",
-        "installer",
-        "--hidden-import",
-        "flet_desktop",
-        "--hidden-import",
-        "flet_desktop.version",
-        "--collect-all",
-        "flet",
-        "--collect-all",
-        "flet_desktop",
-        str(app_path),
+            "--name",
+            name,
+            "--distpath",
+            str(output_dir),
+            "--workpath",
+            str(BUILD_ROOT / "work"),
+            "--specpath",
+            str(BUILD_ROOT / "spec"),
+            "--add-data",
+            f"{assets_root};installer_assets",
+            "--add-data",
+            f"{ui_texts_root};installer/ui_texts",
+            "--add-data",
+            f"{installer_assets_root};installer/assets",
+            str(app_path),
         ]
     )
+    for package_name in PYINSTALLER_DATA_PACKAGES:
+        command.extend(
+            [
+                "--collect-data",
+                package_name,
+            ]
+        )
     subprocess.run(command, check=True, cwd=REPO_ROOT)
 
 
