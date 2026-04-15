@@ -16,13 +16,16 @@ except ModuleNotFoundError:
 
 try:
     from .installer_core import (
+        AssetBundle,
         DEFAULT_VARIANT,
         LanguageBundle,
         VARIANT_IDS,
         detect_install_paths,
         discover_asset_bundle,
+        fetch_remote_asset_bundle,
         install_variant,
         is_running_as_admin,
+        load_asset_bundle,
         normalize_install_path,
         path_requires_admin,
         run_elevated_process,
@@ -36,26 +39,32 @@ except ImportError:
             sys.path.insert(0, candidate_str)
     try:
         from installer.installer_core import (
+            AssetBundle,
             DEFAULT_VARIANT,
+            LanguageBundle,
             VARIANT_IDS,
             detect_install_paths,
             discover_asset_bundle,
-            LanguageBundle,
+            fetch_remote_asset_bundle,
             install_variant,
             is_running_as_admin,
+            load_asset_bundle,
             normalize_install_path,
             path_requires_admin,
             run_elevated_process,
         )
     except ImportError:
         from installer_core import (
+            AssetBundle,
             DEFAULT_VARIANT,
+            LanguageBundle,
             VARIANT_IDS,
             detect_install_paths,
             discover_asset_bundle,
-            LanguageBundle,
+            fetch_remote_asset_bundle,
             install_variant,
             is_running_as_admin,
+            load_asset_bundle,
             normalize_install_path,
             path_requires_admin,
             run_elevated_process,
@@ -128,14 +137,15 @@ def run_elevated_install_mode(args: argparse.Namespace) -> int:
     ui_strings = load_ui_strings(ui_language)
 
     try:
-        bundle = discover_asset_bundle()
+        bundle = load_asset_bundle(source=args.bundle_source, version=args.bundle_version)
         selected_language = bundle.languages[args.language]
-        variant_dir = selected_language.variants[args.variant]
+        variant = selected_language.variants[args.variant]
         install_root = normalize_install_path(args.install_path)
         copied_files = install_variant(
-            variant_dir=variant_dir,
+            variant=variant,
             install_root=install_root,
             game_language=selected_language.game_language,
+            language_code=selected_language.code,
         )
         result = {
             "ok": True,
@@ -187,12 +197,22 @@ def main(page: ft.Page) -> None:
     def strings() -> dict[str, str]:
         return load_ui_strings(selected_language.code)
 
-    status_text = ft.Text(
-        value="",
-        size=13,
-        color="#D6DEE8",
-        font_family=FONT_FAMILY,
-    )
+    def format_text(key: str, **kwargs: object) -> str:
+        return strings()[key].format(**kwargs)
+
+    def bundle_source_label(bundle_source: str) -> str:
+        if bundle_source == "remote":
+            return strings()["bundle_source_remote"]
+        return strings()["bundle_source_local"]
+
+    def bundle_status_text(current_bundle: AssetBundle) -> str:
+        return format_text(
+            "bundle_badge",
+            version=current_bundle.version,
+            source=bundle_source_label(current_bundle.source),
+        )
+
+    status_text = ft.Text(value="", size=13, color="#D6DEE8", font_family=FONT_FAMILY)
     permission_text = ft.Text(size=12, color="#AAB3BB", font_family=FONT_FAMILY)
     progress_ring = ft.ProgressRing(width=18, height=18, stroke_width=2, visible=False, color="#FFAA2B")
     path_field = ft.TextField(
@@ -216,6 +236,13 @@ def main(page: ft.Page) -> None:
     content_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY, color="#FFBF5A")
     status_section_text = ft.Text(size=18, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY, color="#FFBF5A")
     footer_text = ft.Text(size=11, color="#77849A", font_family=FONT_FAMILY)
+    bundle_badge = ft.Text(
+        bundle_status_text(bundle),
+        font_family=FONT_FAMILY,
+        size=11,
+        color="#7FD2FF",
+        weight=ft.FontWeight.W_700,
+    )
     language_dropdown = ft.Dropdown(
         label="",
         value=default_language.code,
@@ -228,10 +255,7 @@ def main(page: ft.Page) -> None:
         label_style=ft.TextStyle(font_family=FONT_FAMILY, color="#FFB347", size=12),
         text_style=ft.TextStyle(font_family=FONT_FAMILY, color="#F5F7FA", size=13),
     )
-    variant_group = ft.RadioGroup(
-        content=ft.Column(spacing=10),
-        value=default_variant,
-    )
+    variant_group = ft.RadioGroup(content=ft.Column(spacing=10), value=default_variant)
     install_button = ft.FilledButton(
         text="",
         icon=ft.Icons.DOWNLOAD_DONE,
@@ -261,6 +285,14 @@ def main(page: ft.Page) -> None:
             text_style=ft.TextStyle(font_family=FONT_FAMILY, size=12, weight=ft.FontWeight.W_600),
         ),
     )
+    check_updates_button = ft.TextButton(
+        "",
+        icon=ft.Icons.CLOUD_DOWNLOAD,
+        style=ft.ButtonStyle(
+            color="#7FD2FF",
+            text_style=ft.TextStyle(font_family=FONT_FAMILY, size=12, weight=ft.FontWeight.W_600),
+        ),
+    )
     kofi_button = ft.TextButton(
         icon=ft.Icons.OPEN_IN_NEW,
         style=ft.ButtonStyle(
@@ -273,10 +305,7 @@ def main(page: ft.Page) -> None:
 
     def panel(title: ft.Text, content: ft.Control) -> ft.Container:
         return ft.Container(
-            content=ft.Column(
-                controls=[title, content],
-                spacing=12,
-            ),
+            content=ft.Column(controls=[title, content], spacing=12),
             padding=18,
             border_radius=18,
             border=ft.border.all(1, "#3C4658"),
@@ -286,39 +315,146 @@ def main(page: ft.Page) -> None:
                 end=ft.alignment.bottom_right,
                 colors=["#111722", "#090C13"],
             ),
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=16,
-                color="#33000000",
-                offset=ft.Offset(0, 8),
-            ),
+            shadow=ft.BoxShadow(spread_radius=0, blur_radius=16, color="#33000000", offset=ft.Offset(0, 8)),
         )
-
-    def frame_accent(width: float, height: float, *, top: float | None = None, left: float | None = None, right: float | None = None, bottom: float | None = None, color: str = "#FF9A1F") -> ft.Container:
-        return ft.Container(
-            width=width,
-            height=height,
-            top=top,
-            left=left,
-            right=right,
-            bottom=bottom,
-            border_radius=6,
-            bgcolor=color,
-            shadow=ft.BoxShadow(
-                blur_radius=18,
-                spread_radius=0,
-                color=color,
-            ),
-        )
-
-    def format_text(key: str, **kwargs: object) -> str:
-        return strings()[key].format(**kwargs)
 
     def variant_label(variant_name: str) -> str:
         return strings()[f"variant_{variant_name.replace('-', '_')}_label"]
 
     def variant_description(variant_name: str) -> str:
         return strings()[f"variant_{variant_name.replace('-', '_')}_desc"]
+
+    def update_status(message: str, *, error: bool = False) -> None:
+        status_text.value = message
+        status_text.color = "#FFB4AB" if error else "#C7CDD3"
+        page.update()
+
+    def show_snackbar(message: str, *, error: bool = False) -> None:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(message, color="#F7FAFC", size=13, font_family=FONT_FAMILY),
+            bgcolor="#8B1E1E" if error else "#1F4A63",
+            behavior=ft.SnackBarBehavior.FLOATING,
+        )
+        page.open(page.snack_bar)
+
+    def update_bundle_ui() -> None:
+        bundle_badge.value = bundle_status_text(bundle)
+        page.update()
+
+    def apply_ui_language() -> None:
+        page.title = strings()["window_title"]
+        headline_text.value = strings()["headline"]
+        subheadline_text.value = strings()["subheadline"]
+        install_section_text.value = strings()["install_section"]
+        content_section_text.value = strings()["content_section"]
+        status_section_text.value = strings()["status_section"]
+        footer_text.value = strings()["footer_support"]
+        language_dropdown.label = strings()["language_label"]
+        path_field.label = strings()["path_label"]
+        path_field.hint_text = strings()["path_hint"]
+        browse_button.text = strings()["browse_button"]
+        path_help_text.value = strings()["path_help"]
+        autodetect_button.text = strings()["autodetect_button"]
+        check_updates_button.text = strings()["check_updates_button"]
+        install_button.text = strings()["install_button"]
+        kofi_button.text = strings()["footer_kofi_button"]
+        update_bundle_ui()
+
+    def refresh_variant_cards(language: LanguageBundle) -> None:
+        available = [name for name in VARIANT_IDS if name in language.variants]
+        variant_cards = []
+        for variant_name in available:
+            def select_variant(_: ft.ControlEvent, selected_variant: str = variant_name) -> None:
+                variant_group.value = selected_variant
+                page.update()
+
+            variant_cards.append(
+                ft.Container(
+                    ink=True,
+                    on_click=select_variant,
+                    content=ft.Row(
+                        controls=[
+                            ft.Radio(value=variant_name),
+                            ft.Column(
+                                controls=[
+                                    ft.Text(variant_label(variant_name), weight=ft.FontWeight.W_600, size=15, font_family=FONT_FAMILY),
+                                    ft.Text(variant_description(variant_name), size=12, color="#B8C0C7", font_family=FONT_FAMILY),
+                                ],
+                                spacing=4,
+                                expand=True,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                    ),
+                    border=ft.border.all(1, "#2C3138"),
+                    border_radius=12,
+                    padding=14,
+                    bgcolor="#171B20",
+                )
+            )
+
+        variant_group.content.controls = variant_cards
+        variant_group.value = DEFAULT_VARIANT if DEFAULT_VARIANT in language.variants else available[0]
+
+    def set_install_path(path: str | Path) -> None:
+        normalized = normalize_install_path(path)
+        path_field.value = str(normalized)
+        admin_required = path_requires_admin(normalized)
+        if admin_required and not is_running_as_admin():
+            permission_text.value = strings()["permission_admin_needed"]
+            permission_text.color = "#FFB4AB"
+        elif admin_required:
+            permission_text.value = strings()["permission_admin_ok"]
+            permission_text.color = "#A9D18E"
+        else:
+            permission_text.value = strings()["permission_no_admin"]
+            permission_text.color = "#AAB3BB"
+        page.update()
+
+    def set_bundle(new_bundle: AssetBundle, *, preferred_language_code: str | None = None) -> None:
+        nonlocal bundle, selected_language
+        bundle = new_bundle
+        languages = list(bundle.languages.values())
+        if not languages:
+            raise ValueError("El paquete seleccionado no contiene idiomas instalables.")
+
+        preferred_code = preferred_language_code or selected_language.code
+        selected_language = bundle.languages.get(preferred_code, bundle.languages.get("en", languages[0]))
+        language_dropdown.options = [ft.dropdown.Option(language.code, language.label) for language in languages]
+        language_dropdown.value = selected_language.code
+        apply_ui_language()
+        refresh_variant_cards(selected_language)
+        if path_field.value:
+            set_install_path(path_field.value)
+        page.update()
+
+    def handle_language_change(_: ft.ControlEvent) -> None:
+        nonlocal selected_language
+        selected_language = bundle.languages[language_dropdown.value]
+        apply_ui_language()
+        refresh_variant_cards(selected_language)
+        update_status(
+            format_text(
+                "status_bundle_detected",
+                version=bundle.version,
+                language=selected_language.label,
+                source=bundle_source_label(bundle.source),
+            ),
+            error=False,
+        )
+        if path_field.value:
+            set_install_path(path_field.value)
+
+    def set_busy(is_busy: bool, message: str | None = None) -> None:
+        install_button.disabled = is_busy
+        browse_button.disabled = is_busy
+        autodetect_button.disabled = is_busy
+        check_updates_button.disabled = is_busy
+        language_dropdown.disabled = is_busy
+        progress_ring.visible = is_busy
+        if message is not None:
+            update_status(message)
+        page.update()
 
     def show_result_dialog(*, version: str, language: str, variant_name: str, install_root: Path, copied_files: list[str]) -> None:
         copied_preview = "\n".join(copied_files[:6])
@@ -348,120 +484,11 @@ def main(page: ft.Page) -> None:
         )
         page.open(result_dialog)
 
-    def apply_ui_language() -> None:
-        page.title = strings()["window_title"]
-        headline_text.value = strings()["headline"]
-        subheadline_text.value = strings()["subheadline"]
-        install_section_text.value = strings()["install_section"]
-        content_section_text.value = strings()["content_section"]
-        status_section_text.value = strings()["status_section"]
-        footer_text.value = strings()["footer_support"]
-        language_dropdown.label = strings()["language_label"]
-        path_field.label = strings()["path_label"]
-        path_field.hint_text = strings()["path_hint"]
-        browse_button.text = strings()["browse_button"]
-        path_help_text.value = strings()["path_help"]
-        autodetect_button.text = strings()["autodetect_button"]
-        install_button.text = strings()["install_button"]
-        kofi_button.text = strings()["footer_kofi_button"]
-
-    def refresh_variant_cards(language: LanguageBundle) -> None:
-        available = [name for name in VARIANT_IDS if name in language.variants]
-        variant_cards = []
-        for variant_name in available:
-            def select_variant(_: ft.ControlEvent, selected_variant: str = variant_name) -> None:
-                variant_group.value = selected_variant
-                page.update()
-
-            variant_cards.append(
-                ft.Container(
-                    ink=True,
-                    on_click=select_variant,
-                    content=ft.Row(
-                        controls=[
-                            ft.Radio(value=variant_name),
-                            ft.Column(
-                                controls=[
-                                    ft.Text(
-                                        variant_label(variant_name),
-                                        weight=ft.FontWeight.W_600,
-                                        size=15,
-                                        font_family=FONT_FAMILY,
-                                    ),
-                                    ft.Text(
-                                        variant_description(variant_name),
-                                        size=12,
-                                        color="#B8C0C7",
-                                        font_family=FONT_FAMILY,
-                                    ),
-                                ],
-                                spacing=4,
-                                expand=True,
-                            ),
-                        ],
-                        vertical_alignment=ft.CrossAxisAlignment.START,
-                    ),
-                    border=ft.border.all(1, "#2C3138"),
-                    border_radius=12,
-                    padding=14,
-                    bgcolor="#171B20",
-                )
-            )
-
-        variant_group.content.controls = variant_cards
-        variant_group.value = DEFAULT_VARIANT if DEFAULT_VARIANT in language.variants else available[0]
-
-    def handle_language_change(_: ft.ControlEvent) -> None:
-        nonlocal selected_language
-        selected_language = bundle.languages[language_dropdown.value]
-        apply_ui_language()
-        refresh_variant_cards(selected_language)
-        update_status(
-            format_text("status_bundle_detected", version=bundle.version, language=selected_language.label),
-            error=False,
-        )
-        if path_field.value:
-            set_install_path(path_field.value)
-
-    def set_busy(is_busy: bool, message: str | None = None) -> None:
-        install_button.disabled = is_busy
-        progress_ring.visible = is_busy
-        if message is not None:
-            update_status(message)
-        page.update()
-
-    def update_status(message: str, *, error: bool = False) -> None:
-        status_text.value = message
-        status_text.color = "#FFB4AB" if error else "#C7CDD3"
-        page.update()
-
-    def show_snackbar(message: str, *, error: bool = False) -> None:
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(
-                message,
-                color="#F7FAFC",
-                size=13,
-                font_family=FONT_FAMILY,
-            ),
-            bgcolor="#8B1E1E" if error else "#1F4A63",
-            behavior=ft.SnackBarBehavior.FLOATING,
-        )
-        page.open(page.snack_bar)
-
-    def set_install_path(path: str | Path) -> None:
-        normalized = normalize_install_path(path)
-        path_field.value = str(normalized)
-        admin_required = path_requires_admin(normalized)
-        if admin_required and not is_running_as_admin():
-            permission_text.value = strings()["permission_admin_needed"]
-            permission_text.color = "#FFB4AB"
-        elif admin_required:
-            permission_text.value = strings()["permission_admin_ok"]
-            permission_text.color = "#A9D18E"
-        else:
-            permission_text.value = strings()["permission_no_admin"]
-            permission_text.color = "#AAB3BB"
-        page.update()
+    def close_dialog(_: ft.ControlEvent | None = None) -> None:
+        if confirm_dialog is not None:
+            page.close(confirm_dialog)
+        if result_dialog is not None:
+            page.close(result_dialog)
 
     def autodetect_install_path(_: ft.ControlEvent | None = None) -> None:
         candidates = detect_install_paths()
@@ -473,6 +500,7 @@ def main(page: ft.Page) -> None:
                     path=candidates[0],
                     version=bundle.version,
                     language=selected_language.label,
+                    source=bundle_source_label(bundle.source),
                 )
             )
             return
@@ -481,6 +509,7 @@ def main(page: ft.Page) -> None:
                 "status_autodetect_failed",
                 version=bundle.version,
                 language=selected_language.label,
+                source=bundle_source_label(bundle.source),
             ),
             error=True,
         )
@@ -494,8 +523,45 @@ def main(page: ft.Page) -> None:
                     path=path_field.value,
                     version=bundle.version,
                     language=selected_language.label,
+                    source=bundle_source_label(bundle.source),
                 )
             )
+
+    def check_updates(_: ft.ControlEvent) -> None:
+        set_busy(True, strings()["status_checking_updates"])
+        try:
+            remote_bundle = fetch_remote_asset_bundle()
+        except Exception as exc:
+            update_status(format_text("status_update_error", error=exc), error=True)
+            show_snackbar(str(exc), error=True)
+            set_busy(False)
+            return
+
+        current_version = bundle.version
+        current_source = bundle.source
+        if remote_bundle.version == current_version and current_source == "remote":
+            update_status(format_text("status_update_current", version=remote_bundle.version))
+            show_snackbar(strings()["snackbar_update_current"])
+            set_busy(False)
+            return
+
+        if remote_bundle.version == current_version and current_source == "local":
+            set_bundle(remote_bundle)
+            update_status(format_text("status_update_same_version", version=remote_bundle.version))
+            show_snackbar(strings()["snackbar_update_same_version"])
+            set_busy(False)
+            return
+
+        set_bundle(remote_bundle)
+        update_status(
+            format_text(
+                "status_update_applied",
+                version=remote_bundle.version,
+                previous=current_version,
+            )
+        )
+        show_snackbar(format_text("snackbar_update_applied", version=remote_bundle.version))
+        set_busy(False)
 
     file_picker = ft.FilePicker(on_result=handle_directory_result)
     page.overlay.append(file_picker)
@@ -510,8 +576,8 @@ def main(page: ft.Page) -> None:
             return
 
         variant_name = variant_group.value
-        variant_dir = selected_language.variants.get(variant_name)
-        if variant_dir is None:
+        variant = selected_language.variants.get(variant_name)
+        if variant is None:
             show_snackbar(strings()["snackbar_variant_missing"], error=True)
             return
 
@@ -520,12 +586,6 @@ def main(page: ft.Page) -> None:
         except Exception as exc:
             show_snackbar(format_text("snackbar_invalid_path", error=exc), error=True)
             return
-
-        def close_dialog(_: ft.ControlEvent | None = None) -> None:
-            if confirm_dialog is not None:
-                page.close(confirm_dialog)
-            if result_dialog is not None:
-                page.close(result_dialog)
 
         def execute_install(_: ft.ControlEvent) -> None:
             if confirm_dialog is not None:
@@ -541,6 +601,10 @@ def main(page: ft.Page) -> None:
                     result_file = Path(temp_handle.name)
                 arguments = [
                     "--elevated-install",
+                    "--bundle-source",
+                    bundle.source,
+                    "--bundle-version",
+                    bundle.version,
                     "--language",
                     selected_language.code,
                     "--variant",
@@ -610,9 +674,10 @@ def main(page: ft.Page) -> None:
 
             try:
                 copied_files = install_variant(
-                    variant_dir=variant_dir,
+                    variant=variant,
                     install_root=install_root,
                     game_language=selected_language.game_language,
+                    language_code=selected_language.code,
                 )
             except Exception as exc:
                 update_status(format_text("status_install_error", error=exc), error=True)
@@ -667,6 +732,7 @@ def main(page: ft.Page) -> None:
     install_button.on_click = confirm_install
     browse_button.on_click = browse_install_path
     autodetect_button.on_click = autodetect_install_path
+    check_updates_button.on_click = check_updates
     kofi_button.on_click = lambda _: page.launch_url(KO_FI_URL)
 
     apply_ui_language()
@@ -725,13 +791,7 @@ def main(page: ft.Page) -> None:
                                                     border_radius=10,
                                                     bgcolor="#111824",
                                                     border=ft.border.all(1, "#36506B"),
-                                                    content=ft.Text(
-                                                        f"PATCH {bundle.version}",
-                                                        font_family=FONT_FAMILY,
-                                                        size=11,
-                                                        color="#7FD2FF",
-                                                        weight=ft.FontWeight.W_700,
-                                                    ),
+                                                    content=bundle_badge,
                                                 ),
                                             ],
                                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -752,6 +812,7 @@ def main(page: ft.Page) -> None:
                                                         controls=[
                                                             path_help_text,
                                                             autodetect_button,
+                                                            check_updates_button,
                                                         ],
                                                     ),
                                                     permission_text,
@@ -803,12 +864,22 @@ def main(page: ft.Page) -> None:
         )
     )
 
+    update_status(
+        format_text(
+            "status_bundle_detected",
+            version=bundle.version,
+            language=selected_language.label,
+            source=bundle_source_label(bundle.source),
+        )
+    )
     autodetect_install_path()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--elevated-install", action="store_true")
+    parser.add_argument("--bundle-source")
+    parser.add_argument("--bundle-version")
     parser.add_argument("--language")
     parser.add_argument("--variant")
     parser.add_argument("--install-path")

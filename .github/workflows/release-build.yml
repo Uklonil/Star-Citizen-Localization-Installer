@@ -63,6 +63,11 @@ jobs:
         run: |
           .\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version "$env:BUILD_VERSION"
 
+      - name: Generate release manifest
+        shell: pwsh
+        run: |
+          python .\scripts\generate_release_manifest.py --version "$env:BUILD_VERSION"
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -83,5 +88,6 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/${{ env.BUILD_VERSION }}/packages/*.zip
+            dist/${{ env.BUILD_VERSION }}/reports/manifest.json
             dist/${{ env.BUILD_VERSION }}/reports/summary.txt
             dist-installer/StarCitizenLocalizationInstaller.exe

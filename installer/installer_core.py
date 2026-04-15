@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import ctypes
+import hashlib
+import json
 import os
 import shutil
 import string
 import subprocess
 import sys
-import ctypes
+import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.language_support import StagedLanguage, discover_staged_languages
+from scripts.language_support import discover_staged_languages
 
 try:
     import winreg
@@ -25,6 +29,10 @@ VARIANT_IDS = (
     "blueprints",
     "componentes-blueprints",
 )
+DEFAULT_RELEASE_REPOSITORY = "Uklonil/Star-Citizen-Localization-Spanish"
+RELEASE_API_BASE_URL = f"https://api.github.com/repos/{DEFAULT_RELEASE_REPOSITORY}/releases"
+MANIFEST_ASSET_NAME = "manifest.json"
+HTTP_TIMEOUT_SECONDS = 20
 
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 INFINITE = 0xFFFFFFFF
@@ -52,10 +60,23 @@ class SHELLEXECUTEINFOW(ctypes.Structure):
 
 
 @dataclass(frozen=True)
+class VariantBundle:
+    name: str
+    bundle_version: str
+    source_dir: Path | None = None
+    package_url: str | None = None
+    archive_name: str | None = None
+    sha256: str | None = None
+    size: int | None = None
+
+
+@dataclass(frozen=True)
 class AssetBundle:
     version: str
-    root: Path
+    root: Path | None
     languages: dict[str, "LanguageBundle"]
+    source: str = "local"
+    release_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -63,8 +84,8 @@ class LanguageBundle:
     code: str
     label: str
     game_language: str
-    root: Path
-    variants: dict[str, Path]
+    root: Path | None
+    variants: dict[str, VariantBundle]
 
 
 def _installer_base_dir() -> Path:
@@ -81,20 +102,213 @@ def _is_valid_variant_dir(path: Path, game_language: str) -> bool:
     return (path / "user.cfg").is_file() and _variant_global_ini_path(path, game_language).is_file()
 
 
-def discover_asset_bundle() -> AssetBundle:
-    bundled_root = _installer_base_dir() / "installer_assets"
-    if bundled_root.is_dir():
-        languages = discover_languages(bundled_root)
-        if languages:
-            return AssetBundle(version=read_bundle_version(bundled_root), root=bundled_root, languages=languages)
+def _cache_root() -> Path:
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "StarCitizenLocalizationInstaller" / "cache"
+    return Path.home() / ".star-citizen-localization-installer" / "cache"
 
-    dist_root = _installer_base_dir() / "dist"
+
+def _cache_version_root(version: str) -> Path:
+    return _cache_root() / version
+
+
+def _http_headers() -> dict[str, str]:
+    return {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "StarCitizenLocalizationInstaller/1.0",
+    }
+
+
+def _http_get_bytes(url: str) -> bytes:
+    request = urllib.request.Request(url, headers=_http_headers())
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+        return response.read()
+
+
+def _http_get_json(url: str) -> dict:
+    payload = json.loads(_http_get_bytes(url).decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"La respuesta remota no es un objeto JSON valido: {url}")
+    return payload
+
+
+def _release_api_url(version: str | None = None) -> str:
+    if version:
+        return f"{RELEASE_API_BASE_URL}/tags/{version}"
+    return f"{RELEASE_API_BASE_URL}/latest"
+
+
+def _download_to_path(*, url: str, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = destination.with_suffix(destination.suffix + ".tmp")
+    if temporary_path.exists():
+        temporary_path.unlink()
+    request = urllib.request.Request(url, headers=_http_headers())
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response, temporary_path.open("wb") as file_handle:
+        shutil.copyfileobj(response, file_handle)
+    temporary_path.replace(destination)
+
+
+def _compute_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _read_cached_manifest(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    with path.open("r", encoding="utf-8") as file_handle:
+        payload = json.load(file_handle)
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _write_cached_manifest(*, version: str, manifest: dict) -> None:
+    manifest_path = _cache_version_root(version) / MANIFEST_ASSET_NAME
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with manifest_path.open("w", encoding="utf-8", newline="\n") as file_handle:
+        json.dump(manifest, file_handle, ensure_ascii=True, indent=2)
+        file_handle.write("\n")
+
+
+def _extract_remote_manifest(release_payload: dict) -> tuple[dict, str | None]:
+    assets = release_payload.get("assets")
+    if not isinstance(assets, list):
+        raise ValueError("La release remota no contiene la lista de assets esperada.")
+
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        if asset.get("name") != MANIFEST_ASSET_NAME:
+            continue
+        download_url = asset.get("browser_download_url")
+        if not isinstance(download_url, str) or not download_url:
+            raise ValueError("El asset del manifest no incluye browser_download_url.")
+        manifest = _http_get_json(download_url)
+        return manifest, release_payload.get("html_url")
+
+    raise FileNotFoundError(f"La release remota no contiene el asset requerido '{MANIFEST_ASSET_NAME}'.")
+
+
+def _variant_from_manifest(*, version: str, variant_name: str, payload: dict) -> VariantBundle:
+    url = payload.get("url")
+    archive_name = payload.get("filename")
+    if not isinstance(url, str) or not url:
+        raise ValueError(f"El manifest no contiene una URL valida para la variante '{variant_name}'.")
+    if not isinstance(archive_name, str) or not archive_name:
+        raise ValueError(f"El manifest no contiene un nombre de archivo valido para la variante '{variant_name}'.")
+
+    sha256 = payload.get("sha256")
+    size = payload.get("size")
+    return VariantBundle(
+        name=variant_name,
+        bundle_version=version,
+        package_url=url,
+        archive_name=archive_name,
+        sha256=sha256 if isinstance(sha256, str) and sha256 else None,
+        size=int(size) if isinstance(size, int) else None,
+    )
+
+
+def _bundle_from_manifest(*, manifest: dict, release_url: str | None) -> AssetBundle:
+    version = manifest.get("version")
+    if not isinstance(version, str) or not version:
+        raise ValueError("El manifest remoto no contiene un campo 'version' valido.")
+
+    languages_payload = manifest.get("languages")
+    if not isinstance(languages_payload, dict) or not languages_payload:
+        raise ValueError("El manifest remoto no contiene idiomas publicables.")
+
+    languages: dict[str, LanguageBundle] = {}
+    for language_code, language_payload in languages_payload.items():
+        if not isinstance(language_payload, dict):
+            continue
+
+        label = language_payload.get("label")
+        game_language = language_payload.get("game_language")
+        variants_payload = language_payload.get("variants")
+        if not isinstance(label, str) or not isinstance(game_language, str) or not isinstance(variants_payload, dict):
+            continue
+
+        variants: dict[str, VariantBundle] = {}
+        for variant_name in VARIANT_IDS:
+            variant_payload = variants_payload.get(variant_name)
+            if isinstance(variant_payload, dict):
+                variants[variant_name] = _variant_from_manifest(
+                    version=version,
+                    variant_name=variant_name,
+                    payload=variant_payload,
+                )
+
+        if not variants:
+            continue
+
+        languages[language_code] = LanguageBundle(
+            code=language_code,
+            label=label,
+            game_language=game_language,
+            root=None,
+            variants=variants,
+        )
+
+    if not languages:
+        raise ValueError("El manifest remoto no contiene variantes instalables.")
+
+    return AssetBundle(
+        version=version,
+        root=_cache_version_root(version) / "staging",
+        languages=languages,
+        source="remote",
+        release_url=release_url,
+    )
+
+
+def _fetch_remote_release_payload(version: str | None = None) -> dict:
+    return _http_get_json(_release_api_url(version))
+
+
+def fetch_remote_asset_bundle(version: str | None = None) -> AssetBundle:
+    release_payload = _fetch_remote_release_payload(version)
+    manifest, release_url = _extract_remote_manifest(release_payload)
+    manifest_version = manifest.get("version")
+    if isinstance(manifest_version, str) and manifest_version:
+        _write_cached_manifest(version=manifest_version, manifest=manifest)
+    return _bundle_from_manifest(manifest=manifest, release_url=release_url)
+
+
+def _local_asset_bundle_candidates() -> list[tuple[float, Path]]:
     candidates: list[tuple[float, Path]] = []
-    if dist_root.is_dir():
-        for version_dir in dist_root.iterdir():
-            staging_dir = version_dir / "staging"
-            if staging_dir.is_dir() and discover_languages(staging_dir):
-                candidates.append((version_dir.stat().st_mtime, version_dir))
+    dist_root = _installer_base_dir() / "dist"
+    if not dist_root.is_dir():
+        return candidates
+
+    for version_dir in dist_root.iterdir():
+        staging_dir = version_dir / "staging"
+        if staging_dir.is_dir() and discover_languages(staging_dir, bundle_version=version_dir.name):
+            candidates.append((version_dir.stat().st_mtime, version_dir))
+    return candidates
+
+
+def discover_local_asset_bundle(*, version: str | None = None) -> AssetBundle:
+    bundled_root = _installer_base_dir() / "installer_assets"
+    bundled_version = read_bundle_version(bundled_root)
+    bundled_languages = discover_languages(bundled_root, bundle_version=bundled_version)
+    if bundled_root.is_dir() and bundled_languages and (version is None or bundled_version == version):
+        return AssetBundle(version=bundled_version, root=bundled_root, languages=bundled_languages, source="local")
+
+    candidates = _local_asset_bundle_candidates()
+    if version is not None:
+        version_dir = _installer_base_dir() / "dist" / version
+        staging_dir = version_dir / "staging"
+        languages = discover_languages(staging_dir, bundle_version=version) if staging_dir.is_dir() else {}
+        if languages:
+            return AssetBundle(version=version, root=staging_dir, languages=languages, source="local")
+        raise FileNotFoundError(f"No se ha encontrado ningun paquete local para la version {version}.")
 
     if not candidates:
         raise FileNotFoundError(
@@ -106,23 +320,53 @@ def discover_asset_bundle() -> AssetBundle:
     return AssetBundle(
         version=selected_version_dir.name,
         root=staging_dir,
-        languages=discover_languages(staging_dir),
+        languages=discover_languages(staging_dir, bundle_version=selected_version_dir.name),
+        source="local",
     )
 
 
-def discover_variants(root: Path, *, game_language: str) -> dict[str, Path]:
-    variants: dict[str, Path] = {}
+def discover_asset_bundle() -> AssetBundle:
+    try:
+        return discover_local_asset_bundle()
+    except FileNotFoundError:
+        return fetch_remote_asset_bundle()
+
+
+def load_asset_bundle(*, source: str | None = None, version: str | None = None) -> AssetBundle:
+    if source == "remote":
+        cached_manifest = _read_cached_manifest(_cache_version_root(version or "latest") / MANIFEST_ASSET_NAME) if version else None
+        if cached_manifest is not None:
+            try:
+                return _bundle_from_manifest(manifest=cached_manifest, release_url=None)
+            except Exception:
+                pass
+        return fetch_remote_asset_bundle(version)
+    if source == "local":
+        return discover_local_asset_bundle(version=version)
+    return discover_asset_bundle()
+
+
+def discover_variants(root: Path, *, game_language: str, bundle_version: str) -> dict[str, VariantBundle]:
+    variants: dict[str, VariantBundle] = {}
     for variant_name in VARIANT_IDS:
         variant_dir = root / variant_name
         if _is_valid_variant_dir(variant_dir, game_language):
-            variants[variant_name] = variant_dir
+            variants[variant_name] = VariantBundle(
+                name=variant_name,
+                bundle_version=bundle_version,
+                source_dir=variant_dir,
+            )
     return variants
 
 
-def discover_languages(root: Path) -> dict[str, LanguageBundle]:
+def discover_languages(root: Path, *, bundle_version: str) -> dict[str, LanguageBundle]:
     languages: dict[str, LanguageBundle] = {}
     for staged_language in discover_staged_languages(root):
-        variants = discover_variants(staged_language.root, game_language=staged_language.game_language)
+        variants = discover_variants(
+            staged_language.root,
+            game_language=staged_language.game_language,
+            bundle_version=bundle_version,
+        )
         if not variants:
             continue
         languages[staged_language.code] = LanguageBundle(
@@ -140,6 +384,62 @@ def read_bundle_version(root: Path) -> str:
     if version_file.is_file():
         return version_file.read_text(encoding="utf-8").strip() or "desconocida"
     return "desconocida"
+
+
+def _cached_variant_root(*, version: str, language_code: str, variant_name: str) -> Path:
+    return _cache_version_root(version) / "staging" / language_code / variant_name
+
+
+def _cached_archive_path(*, version: str, archive_name: str) -> Path:
+    return _cache_version_root(version) / "downloads" / archive_name
+
+
+def ensure_variant_source_dir(*, variant: VariantBundle, language_code: str, game_language: str) -> Path:
+    if variant.source_dir is not None:
+        if not _is_valid_variant_dir(variant.source_dir, game_language):
+            raise FileNotFoundError(f"El paquete local seleccionado no es valido: {variant.source_dir}")
+        return variant.source_dir
+
+    if not variant.package_url or not variant.archive_name:
+        raise FileNotFoundError(f"La variante '{variant.name}' no contiene origen local ni remoto.")
+
+    extract_root = _cached_variant_root(
+        version=variant.bundle_version,
+        language_code=language_code,
+        variant_name=variant.name,
+    )
+    if _is_valid_variant_dir(extract_root, game_language):
+        return extract_root
+
+    archive_path = _cached_archive_path(version=variant.bundle_version, archive_name=variant.archive_name)
+    needs_download = not archive_path.is_file()
+    if not needs_download and variant.sha256:
+        needs_download = _compute_sha256(archive_path).lower() != variant.sha256.lower()
+
+    if needs_download:
+        _download_to_path(url=variant.package_url, destination=archive_path)
+        if variant.sha256:
+            downloaded_hash = _compute_sha256(archive_path)
+            if downloaded_hash.lower() != variant.sha256.lower():
+                archive_path.unlink(missing_ok=True)
+                raise ValueError(
+                    f"El archivo descargado para la variante '{variant.name}' no coincide con el hash esperado."
+                )
+
+    if extract_root.exists():
+        shutil.rmtree(extract_root)
+    extract_root.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        archive.extractall(extract_root)
+
+    if not _is_valid_variant_dir(extract_root, game_language):
+        shutil.rmtree(extract_root, ignore_errors=True)
+        raise FileNotFoundError(
+            f"La variante remota '{variant.name}' no contiene la estructura esperada tras la extraccion."
+        )
+
+    return extract_root
 
 
 def detect_install_paths() -> list[Path]:
@@ -303,9 +603,12 @@ def path_requires_admin(path: str | Path) -> bool:
     return False
 
 
-def install_variant(*, variant_dir: Path, install_root: Path, game_language: str) -> list[Path]:
-    if not _is_valid_variant_dir(variant_dir, game_language):
-        raise FileNotFoundError(f"El paquete seleccionado no es valido: {variant_dir}")
+def install_variant(*, variant: VariantBundle, install_root: Path, game_language: str, language_code: str) -> list[Path]:
+    variant_dir = ensure_variant_source_dir(
+        variant=variant,
+        language_code=language_code,
+        game_language=game_language,
+    )
 
     try:
         install_root.mkdir(parents=True, exist_ok=True)
