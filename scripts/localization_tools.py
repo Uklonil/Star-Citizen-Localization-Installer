@@ -27,6 +27,7 @@ class MergeResult:
 
 
 REFERENCE_TOKEN_RE = re.compile(r"@([A-Za-z0-9_.,-]+)@")
+AUXILIARY_TOKEN_RE = re.compile(r"##([A-Za-z0-9_.,-]+)##")
 RICH_PUNCTUATION_REPLACEMENTS = {
     "\u2018": "'",
     "\u2019": "'",
@@ -115,6 +116,24 @@ def resolve_reference_tokens(
     return REFERENCE_TOKEN_RE.sub(replace, value)
 
 
+def resolve_auxiliary_tokens(
+    value: str,
+    *,
+    auxiliary_map: dict[str, str],
+    missing_tokens: set[str] | None = None,
+) -> str:
+    def replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        replacement = auxiliary_map.get(key)
+        if replacement is None:
+            if missing_tokens is not None:
+                missing_tokens.add(key)
+            return match.group(0)
+        return replacement
+
+    return AUXILIARY_TOKEN_RE.sub(replace, value)
+
+
 def resolve_reference_map(
     mapping: dict[str, str],
     *,
@@ -131,6 +150,31 @@ def resolve_reference_map(
         )
 
     return resolved, missing_tokens
+
+
+def resolve_auxiliary_map(
+    mapping: dict[str, str],
+    *,
+    auxiliary_map: dict[str, str],
+) -> tuple[dict[str, str], set[str]]:
+    resolved: dict[str, str] = {}
+    missing_tokens: set[str] = set()
+
+    for key, value in mapping.items():
+        resolved[key] = resolve_auxiliary_tokens(
+            value,
+            auxiliary_map=auxiliary_map,
+            missing_tokens=missing_tokens,
+        )
+
+    return resolved, missing_tokens
+
+
+def merge_overlay_maps(*overlay_maps: dict[str, str]) -> dict[str, str]:
+    merged: dict[str, str] = {}
+    for overlay_map in overlay_maps:
+        merged.update(overlay_map)
+    return merged
 
 
 def merge_translations(english_data: GlobalIniData, translation_map: dict[str, str]) -> MergeResult:

@@ -17,12 +17,18 @@ from scripts.language_support import (
     find_source_language,
     write_staged_language_metadata,
 )
+from scripts.blueprint_pool_source import (
+    default_blueprint_source_paths,
+    generate_blueprints_overlay_data,
+)
 from localization_tools import (
     apply_overlay,
     apply_replacement_overlay,
+    merge_overlay_maps,
     merge_translations,
     normalize_global_ini_data,
     read_global_ini,
+    resolve_auxiliary_map,
     resolve_reference_map,
     resolve_path,
     write_global_ini,
@@ -174,6 +180,8 @@ def main() -> int:
 
     english_absolute = resolve_path(args.english_global_ini)
     output_absolute = resolve_path(args.output_root)
+    blueprint_template_source, blueprint_pool_source = default_blueprint_source_paths(REPO_ROOT)
+    structured_blueprints_available = blueprint_template_source.exists() and blueprint_pool_source.exists()
 
     if not english_absolute.exists():
         raise FileNotFoundError(f"Required file missing: {english_absolute}")
@@ -199,9 +207,32 @@ def main() -> int:
         blueprints_absolute = resolve_path(args.blueprints_overlay) if args.blueprints_overlay else language.blueprints_overlay
         user_cfg_absolute = resolve_path(args.user_cfg) if args.user_cfg else language.user_cfg
 
-        for required_path in (modified_absolute, components_absolute, blueprints_absolute):
+        if args.blueprints_overlay:
+            blueprints_specific_absolute: Path | None = blueprints_absolute
+            blueprints_shared_absolute: Path | None = None
+        else:
+            blueprints_specific_absolute = language.blueprints_overlay_specific
+            blueprints_shared_absolute = language.blueprints_overlay_shared
+
+        for required_path in (modified_absolute, components_absolute):
             if not required_path.exists():
                 raise FileNotFoundError(f"Required file missing for {language.code}: {required_path}")
+        if (
+            blueprints_specific_absolute is None
+            and blueprints_shared_absolute is None
+            and not structured_blueprints_available
+        ):
+            raise FileNotFoundError(
+                f"Required file missing for {language.code}: {blueprints_absolute}"
+            )
+        for blueprints_candidate in (blueprints_shared_absolute, blueprints_specific_absolute):
+            if blueprints_candidate is not None and not blueprints_candidate.exists():
+                if not (
+                    structured_blueprints_available
+                    and blueprints_shared_absolute is not None
+                    and blueprints_candidate == blueprints_shared_absolute
+                ):
+                    raise FileNotFoundError(f"Required file missing for {language.code}: {blueprints_candidate}")
         if (
             translation_absolute is not None
             and not translation_absolute.exists()
@@ -226,7 +257,28 @@ def main() -> int:
 
         modified_overlay = read_global_ini(modified_absolute)
         components_overlay = read_global_ini(components_absolute)
-        blueprints_overlay = read_global_ini(blueprints_absolute)
+        generated_shared_blueprints_overlay = None
+        if structured_blueprints_available and not args.blueprints_overlay:
+            generated_shared_blueprints_overlay = generate_blueprints_overlay_data(
+                template_path=blueprint_template_source,
+                pool_source_path=blueprint_pool_source,
+            )
+
+        shared_blueprints_overlay = (
+            generated_shared_blueprints_overlay
+            if generated_shared_blueprints_overlay is not None
+            else (read_global_ini(blueprints_shared_absolute) if blueprints_shared_absolute is not None else None)
+        )
+        specific_blueprints_overlay = (
+            read_global_ini(blueprints_specific_absolute) if blueprints_specific_absolute is not None else None
+        )
+        blueprints_overlay_map = merge_overlay_maps(
+            shared_blueprints_overlay.mapping if shared_blueprints_overlay is not None else {},
+            specific_blueprints_overlay.mapping if specific_blueprints_overlay is not None else {},
+        )
+        auxiliary_keys_map = (
+            read_global_ini(language.auxiliary_keys).mapping if language.auxiliary_keys is not None else {}
+        )
 
         reference_map = english_data.mapping.copy()
         reference_map.update(translation_map)
@@ -235,8 +287,12 @@ def main() -> int:
             components_overlay.mapping,
             reference_map=reference_map,
         )
+        blueprints_overlay_with_aux_map, missing_auxiliary_refs = resolve_auxiliary_map(
+            blueprints_overlay_map,
+            auxiliary_map=auxiliary_keys_map,
+        )
         resolved_blueprints_overlay_map, missing_blueprint_refs = resolve_reference_map(
-            blueprints_overlay.mapping,
+            blueprints_overlay_with_aux_map,
             reference_map=reference_map,
         )
 
@@ -268,11 +324,16 @@ def main() -> int:
         validation_errors.extend(
             validate_reference_map(
                 english_map=english_data.mapping,
-                candidate_map=resolved_blueprints_overlay_map,
+                candidate_map=blueprints_overlay_with_aux_map,
                 label=f"Overlay blueprints.ini {language.code}",
                 validate_tokens=False,
             )
         )
+        if missing_auxiliary_refs:
+            sample = ", ".join(sorted(missing_auxiliary_refs)[:10])
+            validation_errors.append(
+                f"Overlay blueprints.ini {language.code}: ##auxiliary## references not resolved ({len(missing_auxiliary_refs)}). Examples: {sample}"
+            )
         if missing_component_refs:
             sample = ", ".join(sorted(missing_component_refs)[:10])
             validation_errors.append(

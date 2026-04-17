@@ -15,6 +15,9 @@ class SourceLanguage:
     modified_overlay: Path
     components_overlay: Path
     blueprints_overlay: Path
+    blueprints_overlay_specific: Path | None
+    blueprints_overlay_shared: Path | None
+    auxiliary_keys: Path | None
     user_cfg: Path | None
     use_english_source_as_base: bool = False
 
@@ -38,8 +41,32 @@ def _optional_path(root: Path, relative_path: str | None) -> Path | None:
     return (root / relative_path).resolve()
 
 
+def _overlay_path_with_shared_fallback(
+    *,
+    repo_root: Path,
+    language_root: Path,
+    relative_path: str,
+    shared_root: Path,
+) -> Path:
+    language_specific = (language_root / relative_path).resolve()
+    if language_specific.exists():
+        return language_specific
+
+    shared_overlay = (shared_root / relative_path).resolve()
+    if shared_overlay.exists():
+        return shared_overlay
+
+    return language_specific
+
+
+def _existing_optional_path(path: Path) -> Path | None:
+    resolved = path.resolve()
+    return resolved if resolved.exists() else None
+
+
 def discover_source_languages(repo_root: Path) -> list[SourceLanguage]:
     languages_root = repo_root / "source" / "languages"
+    shared_root = repo_root / "source" / "shared"
     discovered: list[SourceLanguage] = []
 
     if languages_root.is_dir():
@@ -58,7 +85,19 @@ def discover_source_languages(repo_root: Path) -> list[SourceLanguage]:
                     translation_memory=_optional_path(language_dir, metadata.get("translation_memory")),
                     modified_overlay=(language_dir / metadata["modified_overlay"]).resolve(),
                     components_overlay=(language_dir / metadata["components_overlay"]).resolve(),
-                    blueprints_overlay=(language_dir / metadata["blueprints_overlay"]).resolve(),
+                    blueprints_overlay=_overlay_path_with_shared_fallback(
+                        repo_root=repo_root.resolve(),
+                        language_root=language_dir.resolve(),
+                        relative_path=metadata["blueprints_overlay"],
+                        shared_root=shared_root.resolve(),
+                    ),
+                    blueprints_overlay_specific=_existing_optional_path(
+                        language_dir / metadata["blueprints_overlay"]
+                    ),
+                    blueprints_overlay_shared=_existing_optional_path(
+                        shared_root / metadata["blueprints_overlay"]
+                    ),
+                    auxiliary_keys=_existing_optional_path(language_dir / "auxiliary_keys.ini"),
                     user_cfg=_optional_path(language_dir, metadata.get("user_cfg")),
                     use_english_source_as_base=bool(metadata.get("use_english_source_as_base", False)),
                 )
@@ -78,6 +117,9 @@ def discover_source_languages(repo_root: Path) -> list[SourceLanguage]:
             modified_overlay=(legacy_root / "overlays" / "modified_global.ini").resolve(),
             components_overlay=(legacy_root / "overlays" / "components.ini").resolve(),
             blueprints_overlay=(legacy_root / "overlays" / "blueprints.ini").resolve(),
+            blueprints_overlay_specific=(legacy_root / "overlays" / "blueprints.ini").resolve(),
+            blueprints_overlay_shared=None,
+            auxiliary_keys=_existing_optional_path(legacy_root / "auxiliary_keys.ini"),
             user_cfg=(legacy_root / "user.cfg").resolve(),
             use_english_source_as_base=False,
         )

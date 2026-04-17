@@ -32,6 +32,22 @@ Expected structure per language:
 - `overlays/blueprints.ini`
 - optional `user.cfg`
 
+`blueprints.ini` can be language-specific or shared. If a language-specific file
+is missing, the build falls back to:
+
+- `source/shared/overlays/blueprints.ini`
+
+Priority order:
+
+1. `source/languages/<language>/overlays/blueprints.ini`
+2. `source/shared/overlays/blueprints.ini`
+
+When both files exist, the build merges them by key:
+
+- shared keys act as the base;
+- language-specific keys override only the keys they redefine;
+- missing keys in the language-specific file automatically fall back to the shared file.
+
 `language.json` defines:
 
 - `code`
@@ -163,6 +179,48 @@ Build application order:
 For compatibility, if an old overlay still stores the full text instead of only the suffix, the pipeline automatically trims the base prefix before appending it.
 
 `components.ini` and `blueprints.ini` support `@KEY@` references that are resolved against the effective language base.
+
+`blueprints.ini` also supports language-local auxiliary tokens written as `##token##`.
+These tokens are resolved from:
+
+- `source/languages/<language>/auxiliary_keys.ini`
+
+Example:
+
+```ini
+potential_blueprints=Potential Blueprints
+regional_variants=Regional variants
+```
+
+Then inside `blueprints.ini`:
+
+```ini
+SomeMission_desc_001=\n\n\n\n<EM4>##potential_blueprints##</EM4>\n- @item_Nameexample@
+```
+
+This enables a lower-maintenance workflow for blueprints:
+
+- keep a common `source/shared/overlays/blueprints.ini` for content shared by every language;
+- add `source/languages/<language>/overlays/blueprints.ini` only when that language needs an override;
+- if both exist, the language-specific file wins.
+
+Blueprint rewards can also be maintained from a structured source:
+
+- `source/blueprints/blueprints_template.ini`
+- `source/blueprints/pools.json`
+
+`pools.json` stores reusable visible reward pools and a `mission_pool_map` that links each
+`*_desc*` key to one pool. When both files exist, `build_distributions.py` generates the
+effective shared `blueprints.ini` in memory before packaging, so GitHub workflows do not
+depend on a materialized `source/shared/overlays/blueprints.ini`.
+
+Utility scripts:
+
+- `python .\scripts\bootstrap_blueprint_pools.py`
+  Creates the initial structured source from the current shared overlay.
+- `python .\scripts\generate_blueprints_overlay.py`
+  Regenerates `source/shared/overlays/blueprints.ini` from the structured source.
+  This file is now a generated artifact for inspection and compatibility, not a required build input.
 
 The installer UI also loads its texts from external files:
 
@@ -341,6 +399,22 @@ La estructura esperada por idioma es:
 - `overlays/blueprints.ini`
 - `user.cfg` opcional
 
+`blueprints.ini` puede ser especifico del idioma o compartido. Si falta el
+fichero del idioma, el build usa como fallback:
+
+- `source/shared/overlays/blueprints.ini`
+
+Orden de prioridad:
+
+1. `source/languages/<idioma>/overlays/blueprints.ini`
+2. `source/shared/overlays/blueprints.ini`
+
+Si existen ambos ficheros, el build los fusiona por clave:
+
+- las claves del compartido actuan como base;
+- el fichero especifico del idioma solo sobreescribe las claves que redefine;
+- las claves ausentes en el fichero del idioma caen automaticamente al compartido.
+
 `language.json` define:
 
 - `code`
@@ -472,6 +546,46 @@ El orden de aplicacion durante el build es:
 Por compatibilidad, si un overlay antiguo todavia guarda el texto completo en vez del sufijo, el pipeline recorta automaticamente el prefijo base antes de anexarlo.
 
 Los overlays `components.ini` y `blueprints.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
+
+`blueprints.ini` tambien admite tokens auxiliares por idioma escritos como `##token##`.
+Estos tokens se resuelven desde:
+
+- `source/languages/<idioma>/auxiliary_keys.ini`
+
+Ejemplo:
+
+```ini
+potential_blueprints=Planos potenciales
+regional_variants=Variantes regionales
+```
+
+Y dentro de `blueprints.ini`:
+
+```ini
+SomeMission_desc_001=\n\n\n\n<EM4>##potential_blueprints##</EM4>\n- @item_Nameexample@
+```
+
+Esto permite un flujo de mantenimiento mas simple para blueprints:
+
+- mantener un `source/shared/overlays/blueprints.ini` comun para contenido compartido por todos los idiomas;
+- anadir `source/languages/<idioma>/overlays/blueprints.ini` solo cuando ese idioma necesite un override;
+- si existen ambos, el fichero especifico del idioma tiene prioridad.
+
+Las recompensas de blueprints tambien pueden mantenerse desde una fuente estructurada:
+
+- `source/blueprints/blueprints_template.ini`
+- `source/blueprints/pools.json`
+
+`pools.json` guarda pools reutilizables de recompensas visibles y un `mission_pool_map` que
+enlaza cada clave `*_desc*` con una pool. Si ambos ficheros existen, `build_distributions.py`
+genera en memoria el `blueprints.ini` compartido efectivo antes de empaquetar.
+
+Scripts utiles:
+
+- `python .\scripts\bootstrap_blueprint_pools.py`
+  Genera la fuente estructurada inicial a partir del overlay compartido actual.
+- `python .\scripts\generate_blueprints_overlay.py`
+  Regenera `source/shared/overlays/blueprints.ini` desde la fuente estructurada.
 
 La interfaz del instalador tambien carga sus textos desde archivos externos:
 

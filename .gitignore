@@ -7,3 +7,4 @@ venv/
 .installer-venv/
 __pycache__/
 .scdt-cache/
+informes/
