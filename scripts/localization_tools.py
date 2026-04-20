@@ -226,3 +226,20 @@ def apply_replacement_overlay(base_entries: Iterable[Entry], overlay_map: dict[s
         result.append(Entry(key=entry.key, value=value))
 
     return result
+
+
+def append_new_entries(
+    base_entries: Iterable[Entry],
+    *,
+    extra_entries: Iterable[Entry],
+) -> list[Entry]:
+    result = list(base_entries)
+    existing_keys = {entry.key for entry in result}
+
+    for entry in extra_entries:
+        if entry.key in existing_keys:
+            continue
+        result.append(entry)
+        existing_keys.add(entry.key)
+
+    return result

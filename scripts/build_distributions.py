@@ -22,8 +22,10 @@ from scripts.blueprint_pool_source import (
     generate_blueprints_overlay_data,
 )
 from localization_tools import (
+    Entry,
     apply_overlay,
     apply_replacement_overlay,
+    append_new_entries,
     merge_overlay_maps,
     merge_translations,
     normalize_global_ini_data,
@@ -69,11 +71,12 @@ def validate_reference_map(
     label: str,
     validate_tokens: bool = True,
     allow_added_tokens: bool = False,
+    allow_unknown_keys: bool = False,
 ) -> list[str]:
     errors: list[str] = []
 
     unknown_keys = sorted(set(candidate_map) - set(english_map))
-    if unknown_keys:
+    if unknown_keys and not allow_unknown_keys:
         sample = ", ".join(unknown_keys[:10])
         errors.append(
             f"{label}: contains {len(unknown_keys)} keys that do not exist in the English global.ini. "
@@ -101,6 +104,24 @@ def validate_reference_map(
     return errors
 
 
+def collect_overlay_extra_entries(
+    *,
+    english_map: dict[str, str],
+    overlay_entries: list[Entry],
+) -> list[Entry]:
+    extras_by_key: dict[str, Entry] = {}
+    ordered_keys: list[str] = []
+
+    for entry in overlay_entries:
+        if entry.key in english_map:
+            continue
+        if entry.key not in extras_by_key:
+            ordered_keys.append(entry.key)
+        extras_by_key[entry.key] = entry
+
+    return [extras_by_key[key] for key in ordered_keys]
+
+
 def validate_output_entries(*, english_entries, output_entries, label: str) -> list[str]:
     errors: list[str] = []
     english_entries = list(english_entries)
@@ -125,6 +146,46 @@ def validate_output_entries(*, english_entries, output_entries, label: str) -> l
         output_tokens = extract_tokens(output_entry.value)
         if not contains_subsequence(output_tokens, english_tokens):
             errors.append(f"{label}: placeholders o markup alterados en la clave {english_entry.key}")
+
+    return errors
+
+
+def validate_output_entries_with_extras(
+    *,
+    english_entries,
+    output_entries,
+    label: str,
+    expected_extra_entries: list[Entry],
+) -> list[str]:
+    english_entries = list(english_entries)
+    output_entries = list(output_entries)
+    expected_prefix = output_entries[: len(english_entries)]
+    errors = validate_output_entries(
+        english_entries=english_entries,
+        output_entries=expected_prefix,
+        label=label,
+    )
+    if errors:
+        return errors
+
+    actual_extras = output_entries[len(english_entries) :]
+    if len(actual_extras) != len(expected_extra_entries):
+        return [
+            f"{label}: the number of appended extra keys does not match the modified_global overlay "
+            f"({len(actual_extras)} vs {len(expected_extra_entries)})"
+        ]
+
+    for expected_entry, actual_entry in zip(expected_extra_entries, actual_extras):
+        if expected_entry.key != actual_entry.key:
+            errors.append(
+                f"{label}: unexpected extra key order at end of file: "
+                f"{actual_entry.key} != {expected_entry.key}"
+            )
+            continue
+        if expected_entry.value != actual_entry.value:
+            errors.append(
+                f"{label}: appended extra key value mismatch for {actual_entry.key}"
+            )
 
     return errors
 
@@ -311,6 +372,7 @@ def main() -> int:
                 candidate_map=modified_overlay.mapping,
                 label=f"Overlay modified_global.ini {language.code}",
                 validate_tokens=False,
+                allow_unknown_keys=True,
             )
         )
         validation_errors.extend(
@@ -351,8 +413,13 @@ def main() -> int:
                 f"The master memory for {language.code} does not contain any translated keys that match the current global.ini."
             )
 
+        modified_overlay_extra_entries = collect_overlay_extra_entries(
+            english_map=english_data.mapping,
+            overlay_entries=modified_overlay.entries,
+        )
         base_merge = merge_translations(english_data=english_data, translation_map=translation_map)
         base_entries = apply_replacement_overlay(base_entries=base_merge.entries, overlay_map=modified_overlay.mapping)
+        base_entries = append_new_entries(base_entries, extra_entries=modified_overlay_extra_entries)
         components_entries = apply_overlay(base_entries=base_entries, overlay_map=resolved_components_overlay_map)
         blueprints_entries = apply_overlay(base_entries=base_entries, overlay_map=resolved_blueprints_overlay_map)
         combined_entries = apply_overlay(base_entries=components_entries, overlay_map=resolved_blueprints_overlay_map)
@@ -365,10 +432,11 @@ def main() -> int:
         )
         for variant_name, variant_entries in variants:
             validation_errors.extend(
-                validate_output_entries(
+                validate_output_entries_with_extras(
                     english_entries=english_data.entries,
                     output_entries=variant_entries,
                     label=f"Salida {language.code}/{variant_name}",
+                    expected_extra_entries=modified_overlay_extra_entries,
                 )
             )
 
