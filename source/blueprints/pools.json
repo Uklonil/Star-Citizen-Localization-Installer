@@ -674,6 +674,123 @@
         "item_Name_rrs_specialist_heavy_helmet_01_01_10",
         "item_Nameksar_shotgun_energy_01_mag"
       ]
+    },
+    "BP_MISSIONREWARD_BitZeros_BlackBoxRecovery": {
+      "item_refs": [
+        "item_Nameklwe_smg_energy_01",
+        "item_Nameklwe_sniper_energy_01",
+        "item_Name_ccc_medium_armor_arms_01_01_01",
+        "item_Name_ccc_medium_armor_core_01_01_01",
+        "item_Name_ccc_medium_armor_legs_01_01_01",
+        "item_Name_ccc_medium_armor_helmet_01",
+        "item_Name_ccc_medium_armor_core_01_01_shrike",
+        "item_Name_ccc_medium_armor_arms_01_01_shrike",
+        "item_Name_ccc_medium_armor_legs_01_01_shrike",
+        "item_Name_ccc_medium_armor_helmet_01_01_shrike",
+        "item_Nameklwe_smg_energy_01_mag",
+        "item_Nameklwe_sniper_energy_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_BitZeros_RecoverItem_PyroNyx": {
+      "item_refs": [
+        "item_Nameksar_smg_energy_01",
+        "item_Nameksar_smg_energy_01_black01",
+        "item_Nameksar_smg_energy_01_firerats01",
+        "item_Name_rrs_specialist_light_arms_01_01_01",
+        "item_Name_rrs_specialist_light_core_01_01_01",
+        "item_Name_rrs_specialist_light_legs_01_01_01",
+        "item_Name_rrs_specialist_light_helmet_01_01_01",
+        "item_Nameksar_smg_energy_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_BitZeros_RecoverItem_Stanton": {
+      "item_refs": [
+        "item_Nameklwe_smg_energy_01",
+        "item_Name_outlaw_legacy_armor_medium_core_01_01_12",
+        "item_Name_outlaw_legacy_armor_medium_arms_01_01_12",
+        "item_Name_outlaw_legacy_armor_medium_legs_01_01_12",
+        "item_Name_outlaw_legacy_medium_armor_helmet_01_02_01",
+        "item_Name_outlaw_legacy_armor_medium_core_01_01_11",
+        "item_Name_outlaw_legacy_armor_medium_arms_01_01_11",
+        "item_Name_outlaw_legacy_armor_medium_legs_01_01_11",
+        "item_Nameklwe_smg_energy_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_Rayari_RecoverItem_Irradiated": {
+      "item_refs": [
+        "item_Namevolt_shotgun_energy_01_tint02",
+        "item_Namevolt_shotgun_energy_01_tint01",
+        "item_Namevolt_shotgun_energy_01_tint03",
+        "item_Namevolt_shotgun_energy_01",
+        "item_Name_clda_utility_heavy_suit_03_01_01",
+        "item_Name_clda_utility_heavy_helmet_03_01_01",
+        "item_Namevolt_shotgun_energy_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_HeadHunters_MercenaryFPS_EliminateBoss": {
+      "item_refs": [
+        "item_Nameksar_shotgun_ballistic_01",
+        "item_Namenone_smg_energy_01",
+        "item_Name_srvl_armor_heavy_arms_02_01_01",
+        "item_Name_srvl_armor_heavy_core_02_01_01",
+        "item_Name_srvl_armor_heavy_legs_02_01_01",
+        "item_Name_ksar_armor_heavy_helmet_01_01_01",
+        "item_Nameksar_shotgun_ballistic_01_mag",
+        "item_Namenone_shotgun_ballistic_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_BountyHuntersGuild_PAF_EliminateSpecific": {
+      "item_refs": [
+        "item_Namebehr_rifle_ballistic_02_civilian",
+        "item_Name_qrt_utility_heavy_arms_01_01_01",
+        "item_Name_qrt_utility_heavy_core_01_01_01",
+        "item_Name_qrt_utility_heavy_legs_01_01_01",
+        "item_Name_qrt_utility_heavy_helmet_01_01_01",
+        "item_Name_qrt_utility_heavy_arms_01_01_10",
+        "item_Name_qrt_utility_heavy_core_01_01_10",
+        "item_Name_qrt_utility_heavy_legs_01_01_10",
+        "item_Name_qrt_utility_heavy_helmet_01_01_10",
+        "item_Namebehr_rifle_ballistic_02_civilian_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_FoxwellEnforcement_EscortShips": {
+      "item_refs": [
+        "item_Namevolt_rifle_energy_01_camo01",
+        "item_Name_qrt_specialist_heavy_arms_01_01_10",
+        "item_Name_qrt_specialist_heavy_core_01_01_10",
+        "item_Name_qrt_specialist_heavy_legs_01_01_10",
+        "item_Name_qrt_specialist_heavy_helmet_01_01_10",
+        "item_Namevolt_rifle_energy_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_VaughnGenerator_EliminateBoss": {
+      "item_refs": [
+        "item_Namenone_lmg_ballistic_01",
+        "item_Namenone_pistol_ballistic_01",
+        "item_Name_outlaw_legacy_armor_heavy_arms_01_01_01",
+        "item_Name_outlaw_legacy_armor_heavy_legs_01_01_01",
+        "item_Name_outlaw_legacy_armor_heavy_core_01_01_01",
+        "item_Name_outlaw_legacy_armor_heavy_helmet_01_01_01",
+        "item_Name_gys_jacket_01_01_01",
+        "item_Name_gys_pants_01_01_01",
+        "item_Namenone_lmg_ballistic_01_mag",
+        "item_Namenone_pistol_ballistic_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_RDC_Exclusive": {
+      "item_refs": [
+        "item_Namegmni_shotgun_ballistic_01_pink_red01",
+        "item_Namegmni_shotgun_ballistic_01_red_black01",
+        "item_Name_kap_combat_heavy_arms_02_07_01",
+        "item_Name_kap_combat_heavy_legs_02_07_01",
+        "item_Name_kap_combat_heavy_core_02_07_01",
+        "item_Name_kap_combat_heavy_helmet_02_07_01",
+        "item_Name_kap_combat_heavy_helmet_02_05_01",
+        "item_Name_kap_combat_heavy_legs_02_04_01",
+        "item_Name_kap_combat_heavy_core_02_04_01",
+        "item_Name_kap_combat_heavy_arms_02_04_01",
+        "item_Namegmni_shotgun_ballistic_01_mag"
+      ]
     }
   },
   "mission_pool_map": {
