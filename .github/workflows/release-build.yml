@@ -1,11 +1,16 @@
 name: Build And Release
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
   workflow_dispatch:
     inputs:
       version:
         description: "Version to build and publish, for example 4.7.1-live.11592622"
-        required: true
+        required: false
         type: string
       english_global_ini:
         description: "Path to the extracted English global.ini committed in the repo"
@@ -17,20 +22,26 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.event.inputs.version }}
+  group: release-${{ github.workflow }}-${{ github.event.pull_request.merge_commit_sha || github.ref || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   build-release:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.merged == true &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.ref == 'develop'
+      )
     runs-on: windows-latest
-
-    env:
-      BUILD_VERSION: ${{ github.event.inputs.version }}
-      ENGLISH_GLOBAL_INI: ${{ github.event.inputs.english_global_ini }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,6 +49,32 @@ jobs:
           python-version: "3.9"
           cache: "pip"
           cache-dependency-path: installer/requirements-build.txt
+
+      - name: Resolve build version and inputs
+        shell: pwsh
+        run: |
+          $manualVersion = "${{ github.event.inputs.version }}"
+          if ($manualVersion) {
+            $version = $manualVersion.Trim()
+          } else {
+            if (-not (Test-Path ".\VERSION")) {
+              Write-Error "Missing VERSION file in repository root. Commit it before triggering the release workflow."
+            }
+            $version = (Get-Content .\VERSION -Raw).Trim()
+          }
+
+          if (-not $version) {
+            Write-Error "Resolved BUILD_VERSION is empty."
+          }
+
+          $englishGlobalIni = "${{ github.event.inputs.english_global_ini }}"
+          if (-not $englishGlobalIni) {
+            $englishGlobalIni = "input/current/global.ini"
+          }
+
+          "BUILD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ENGLISH_GLOBAL_INI=$englishGlobalIni" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "INSTALLER_NAME=StarCitizenLocalizationInstaller-$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Check required English global.ini exists
         shell: pwsh
@@ -61,12 +98,12 @@ jobs:
       - name: Build installer executable
         shell: pwsh
         run: |
-          .\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version "$env:BUILD_VERSION"
+          .\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version "$env:BUILD_VERSION" --name "$env:INSTALLER_NAME"
 
       - name: Generate release manifest
         shell: pwsh
         run: |
-          python .\scripts\generate_release_manifest.py --version "$env:BUILD_VERSION"
+          python .\scripts\generate_release_manifest.py --version "$env:BUILD_VERSION" --installer-path "dist-installer/$env:INSTALLER_NAME.exe"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
@@ -76,7 +113,7 @@ jobs:
           path: |
             dist/${{ env.BUILD_VERSION }}/packages/*.zip
             dist/${{ env.BUILD_VERSION }}/reports/*
-            dist-installer/StarCitizenLocalizationInstaller.exe
+            dist-installer/${{ env.INSTALLER_NAME }}.exe
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -90,4 +127,4 @@ jobs:
             dist/${{ env.BUILD_VERSION }}/packages/*.zip
             dist/${{ env.BUILD_VERSION }}/reports/manifest.json
             dist/${{ env.BUILD_VERSION }}/reports/summary.txt
-            dist-installer/StarCitizenLocalizationInstaller.exe
+            dist-installer/${{ env.INSTALLER_NAME }}.exe
