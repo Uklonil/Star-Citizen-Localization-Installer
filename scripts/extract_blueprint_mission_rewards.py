@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,7 +124,54 @@ class DataCoreBinaryCompat:
                 self.structure_instances.setdefault(mapping.structure_index, []).append(offset)
                 offset += struct_size
 
+        self._string_cache: dict[int, str] = {}
+        self.records_by_guid: dict[str, dftypes.Record] = {}
+        self.record_types: set[str] = set()
+        self.entities: dict[str, dftypes.Record] = {}
+        for record in self.records:
+            try:
+                record_type = record.type
+            except Exception:
+                record_type = ""
+            if record_type == "EntityClassDefinition":
+                self.entities[record.name] = record
+            self.records_by_guid[record.id.value] = record
+            self.record_types.add(record_type)
+
         self.trailing_bytes = len(self.raw_data) - offset
+
+    def get_structure_instance_from_offset(self, structure_index: int, offset: int):
+        if offset not in self.structure_instances_by_offset.setdefault(structure_index, {}):
+            struct_def = self.structure_definitions[structure_index]
+            self.structure_instances_by_offset[structure_index][offset] = dftypes.StructureInstance(
+                self, offset, struct_def
+            )
+        return self.structure_instances_by_offset[structure_index][offset]
+
+    def get_structure_instance(self, structure_index: int, instance: int):
+        current = self.structure_instances[structure_index][instance]
+        if not isinstance(current, dftypes.StructureInstance):
+            offset = current
+            self.structure_instances[structure_index][instance] = self.get_structure_instance_from_offset(
+                structure_index, offset
+            )
+        return self.structure_instances[structure_index][instance]
+
+    def string_for_offset(self, offset: int, encoding: str = "UTF-8") -> str:
+        if offset not in self._string_cache:
+            try:
+                if offset >= self.header.text_length:
+                    raise IndexError(f'Text offset "{offset}" is out of range')
+                end = self.raw_data.obj.index(
+                    0x00,
+                    self.text_offset + offset,
+                    self.text_offset + self.header.text_length,
+                )
+                self._string_cache[offset] = bytes(self.raw_data[self.text_offset + offset : end]).decode(encoding)
+            except ValueError:
+                sys.stderr.write(f"Invalid string offset: {offset}")
+                return ""
+        return self._string_cache[offset]
 
 
 def read_ini_map(path: Path) -> dict[str, str]:
