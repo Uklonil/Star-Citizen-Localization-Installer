@@ -347,6 +347,17 @@ You can also open the app directly in script mode:
 4. Run `build_distributions.py`.
 5. Distribute the ZIPs or generate the installer with `build_installer.py`.
 
+### Automated GitHub release workflow
+
+- The repository root contains a `VERSION` file used as the default release version.
+- `.github/workflows/release-build.yml` runs automatically when a pull request from `develop` is merged into `main`.
+- The workflow can still be run manually with `workflow_dispatch`; in that case the optional `version` input overrides `VERSION`.
+- Recommended release flow:
+  1. Update `VERSION` in `develop`.
+  2. Commit the extracted `input/current/global.ini` and the localization changes for that patch.
+  3. Merge `develop` into `main`.
+  4. Let the workflow build packages, the installer, the manifest, and the GitHub release from that merge commit.
+
 ### Support and additional info
 
 If you want to support this project, you can use my referral code when buying Star Citizen:
@@ -711,6 +722,17 @@ Tambien puedes abrir la app directamente en modo script:
 3. Ajusta `source/languages/<idioma>/overlays/*.ini` si hace falta.
 4. Ejecuta `build_distributions.py`.
 5. Distribuye los ZIP o genera el instalador con `build_installer.py`.
+
+### Flujo automatizado de release en GitHub
+
+- La raiz del repositorio incluye un fichero `VERSION` que se usa como version por defecto de la release.
+- `.github/workflows/release-build.yml` se ejecuta automaticamente cuando se fusiona en `main` un pull request procedente de `develop`.
+- El workflow se puede seguir lanzando manualmente con `workflow_dispatch`; en ese caso, la entrada opcional `version` tiene prioridad sobre `VERSION`.
+- Flujo recomendado de release:
+  1. Actualiza `VERSION` en `develop`.
+  2. Sube `input/current/global.ini` extraido y los cambios de localizacion del parche.
+  3. Fusiona `develop` en `main`.
+  4. Deja que el workflow construya paquetes, instalador, manifiesto y release de GitHub a partir de ese merge commit.
 
 ### Soporte e informacion adicional
 
