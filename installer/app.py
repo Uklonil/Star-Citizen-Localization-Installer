@@ -94,6 +94,10 @@ def _orbitron_font_path() -> Path:
     return _assets_dir() / "Orbitron-VariableFont_wght.ttf"
 
 
+def _community_banner_path() -> Path:
+    return _assets_dir() / "MadeByTheCommunity_Black.png"
+
+
 def _load_ui_text_file(language_code: str) -> dict[str, str]:
     cached = _UI_CACHE.get(language_code)
     if cached is not None:
@@ -242,6 +246,13 @@ def main(page: ft.Page) -> None:
         size=11,
         color="#7FD2FF",
         weight=ft.FontWeight.W_700,
+    )
+    community_banner = ft.Image(
+        src=str(_community_banner_path()),
+        width=320,
+        height=68,
+        fit=ft.ImageFit.CONTAIN,
+        filter_quality=ft.FilterQuality.HIGH,
     )
     language_dropdown = ft.Dropdown(
         label="",
@@ -786,12 +797,19 @@ def main(page: ft.Page) -> None:
                                                     spacing=6,
                                                     expand=True,
                                                 ),
-                                                ft.Container(
-                                                    padding=ft.padding.symmetric(horizontal=12, vertical=8),
-                                                    border_radius=10,
-                                                    bgcolor="#111824",
-                                                    border=ft.border.all(1, "#36506B"),
-                                                    content=bundle_badge,
+                                                ft.Column(
+                                                    controls=[
+                                                        ft.Container(
+                                                            padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                                                            border_radius=10,
+                                                            bgcolor="#111824",
+                                                            border=ft.border.all(1, "#36506B"),
+                                                            content=bundle_badge,
+                                                        ),
+                                                        community_banner,
+                                                    ],
+                                                    spacing=12,
+                                                    horizontal_alignment=ft.CrossAxisAlignment.END,
                                                 ),
                                             ],
                                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
