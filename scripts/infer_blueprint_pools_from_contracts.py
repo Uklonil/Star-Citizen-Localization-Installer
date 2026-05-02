@@ -179,7 +179,12 @@ def resolve_known_pools(template_map: dict[str, str], pools_data: dict) -> dict[
     known: dict[str, str] = {}
     mission_pool_map = pools_data.get("mission_pool_map", {})
     for desc_key, pool_name in mission_pool_map.items():
-        known[desc_key] = pool_name
+        if isinstance(pool_name, str):
+            known[desc_key] = pool_name
+        elif isinstance(pool_name, list):
+            string_values = [value for value in pool_name if isinstance(value, str)]
+            if len(string_values) == 1:
+                known[desc_key] = string_values[0]
     for key, value in template_map.items():
         pools = list(dict.fromkeys(match.group("pool") for match in POOL_TOKEN_RE.finditer(value)))
         if len(pools) == 1:

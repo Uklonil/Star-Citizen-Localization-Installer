@@ -7,6 +7,7 @@ from pathlib import Path
 from localization_tools import Entry, GlobalIniData, read_global_ini
 
 POOL_TOKEN_RE = re.compile(r"@((?:BP_MISSIONREWARD|OVERLAY_)[A-Za-z0-9_]+(?:__\d+)?)@")
+GENERIC_BLUEPRINT_BLOCK_PREFIX = "\\n\\n\\n\\n<EM4>##potential_blueprints##</EM4>\\n"
 
 
 def default_blueprint_source_paths(repo_root: Path) -> tuple[Path, Path]:
@@ -27,6 +28,16 @@ def _load_pool_source(path: Path) -> dict:
         raise ValueError(f"Faltan `pools` o `mission_pool_map` en {path}")
 
     return payload
+
+
+def _normalize_pool_refs(raw_value: object, *, context: str) -> list[str]:
+    if isinstance(raw_value, str):
+        return [raw_value]
+    if isinstance(raw_value, list) and all(isinstance(item, str) for item in raw_value):
+        return list(raw_value)
+    raise ValueError(
+        f"Valor invalido en {context}: se esperaba `str` o `list[str]`."
+    )
 
 
 def render_pool_item_block(item_refs: list[str]) -> str:
@@ -95,15 +106,45 @@ def resolve_pool_tokens(value: str, *, pool_map: dict[str, dict]) -> str:
     return POOL_TOKEN_RE.sub(replace, value)
 
 
+def render_pool_sequence(pool_ids: list[str], *, pool_map: dict[str, dict]) -> str:
+    rendered_blocks: list[str] = []
+    for pool_id in pool_ids:
+        pool_definition = pool_map.get(pool_id)
+        if pool_definition is None:
+            raise ValueError(f"Pool inexistente `{pool_id}`")
+
+        variants = pool_definition.get("variants")
+        if isinstance(variants, list):
+            rendered_blocks.append(render_pool_variants(variants))
+            continue
+
+        lines = pool_definition.get("lines")
+        if isinstance(lines, list):
+            rendered_blocks.append(render_pool_lines(lines))
+            continue
+
+        item_refs = pool_definition.get("item_refs")
+        if isinstance(item_refs, list):
+            rendered_blocks.append(render_pool_item_block([str(item_ref) for item_ref in item_refs]))
+            continue
+
+        raise ValueError(f"Pool invalida `{pool_id}`: falta `item_refs`, `lines` o `variants`")
+
+    return "\\n\\n".join(rendered_blocks)
+
+
 def generate_blueprints_overlay_data(*, template_path: Path, pool_source_path: Path) -> GlobalIniData:
     template = read_global_ini(template_path)
     pool_source = _load_pool_source(pool_source_path)
     pools = pool_source["pools"]
     mission_pool_map = pool_source["mission_pool_map"]
 
-    unknown_pools = sorted(
-        {pool_id for pool_id in mission_pool_map.values() if pool_id not in pools}
-    )
+    referenced_pool_ids = {
+        pool_id
+        for key, raw_value in mission_pool_map.items()
+        for pool_id in _normalize_pool_refs(raw_value, context=f"`mission_pool_map[{key}]`")
+    }
+    unknown_pools = sorted(pool_id for pool_id in referenced_pool_ids if pool_id not in pools)
     if unknown_pools:
         sample = ", ".join(unknown_pools[:10])
         raise ValueError(
@@ -112,16 +153,27 @@ def generate_blueprints_overlay_data(*, template_path: Path, pool_source_path: P
 
     generated_entries: list[Entry] = []
     for entry in template.entries:
-        pool_id = mission_pool_map.get(entry.key)
-        if pool_id is not None:
+        raw_pool_refs = mission_pool_map.get(entry.key)
+        pool_refs = (
+            _normalize_pool_refs(raw_pool_refs, context=f"`mission_pool_map[{entry.key}]`")
+            if raw_pool_refs is not None
+            else []
+        )
+        for pool_id in pool_refs:
             pool_definition = pools[pool_id]
             if not isinstance(pool_definition, dict):
                 raise ValueError(f"Definicion de pool invalida para `{pool_id}` en {pool_source_path}")
 
+        rendered_value = resolve_pool_tokens(entry.value, pool_map=pools)
+        if len(pool_refs) > 1:
+            pool_token_count = len(POOL_TOKEN_RE.findall(entry.value))
+            if pool_token_count <= 1:
+                rendered_value = f"{GENERIC_BLUEPRINT_BLOCK_PREFIX}{render_pool_sequence(pool_refs, pool_map=pools)}"
+
         generated_entries.append(
             Entry(
                 key=entry.key,
-                value=resolve_pool_tokens(entry.value, pool_map=pools),
+                value=rendered_value,
             )
         )
 
