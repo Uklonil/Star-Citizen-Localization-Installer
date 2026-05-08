@@ -1,0 +1,10 @@
+input/current/global.ini
+source/languages/es-es/translation.ini
+source/languages/<code>/overlays/
+source/blueprints/
+scripts/
+.codex/skills/sc-blueprint-extractor/scripts/
+installer/
+dist/
+dist-installer/
+informes/

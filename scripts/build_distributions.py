@@ -10,6 +10,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+SKILL_BLUEPRINT_SCRIPTS = REPO_ROOT / ".codex" / "skills" / "sc-blueprint-extractor" / "scripts" / "core"
+if str(SKILL_BLUEPRINT_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SKILL_BLUEPRINT_SCRIPTS))
 
 from scripts.language_support import (
     SourceLanguage,
@@ -17,7 +20,7 @@ from scripts.language_support import (
     find_source_language,
     write_staged_language_metadata,
 )
-from scripts.blueprint_pool_source import (
+from blueprint_pool_source import (
     default_blueprint_source_paths,
     generate_blueprints_overlay_data,
 )

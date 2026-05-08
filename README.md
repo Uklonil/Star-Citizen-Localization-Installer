@@ -115,13 +115,13 @@ Keeping the installer environment separate is recommended because `PyInstaller` 
 
 #### 1. Extract the English `global.ini`
 
-From the game folder:
+Preferred skill-based command:
 
-```bash
-python .\scripts\extract_english_localization.py "D:\RSI\StarCitizen\LIVE"
+```powershell
+.\.codex\skills\sc-global-ini-sync\scripts\extract_global.ps1 -P4K "C:\Program Files\Roberts Space Industries\StarCitizen\LIVE\Data.p4k"
 ```
 
-It also accepts a direct path to `Data.p4k`.
+It also accepts `SC_DATA_P4K` from the environment and keeps heavy extraction artifacts under `/data/starcitizen/`.
 
 Default output:
 
@@ -216,9 +216,9 @@ depend on a materialized `source/shared/overlays/blueprints.ini`.
 
 Utility scripts:
 
-- `python .\scripts\bootstrap_blueprint_pools.py`
+- `python .\.codex\skills\sc-blueprint-extractor\scripts\maintenance\bootstrap_blueprint_pools.py`
   Creates the initial structured source from the current shared overlay.
-- `python .\scripts\generate_blueprints_overlay.py`
+- `python .\.codex\skills\sc-blueprint-extractor\scripts\maintenance\generate_blueprints_overlay.py`
   Regenerates `source/shared/overlays/blueprints.ini` from the structured source.
   This file is now a generated artifact for inspection and compatibility, not a required build input.
 
@@ -283,7 +283,7 @@ The repository also includes helper utilities:
   Classifies newline-related issues.
 - `scripts/inspect_mismatch_keys.py`
   Helps inspect specific keys with issues.
-- `scripts/normalize_blueprints_overlay.py`
+- `.codex/skills/sc-blueprint-extractor/scripts/maintenance/normalize_blueprints_overlay.py`
   Replaces literal object names inside `blueprints.ini` with `@KEY@` references to improve consistency.
 
 Example integrity check:
@@ -493,13 +493,13 @@ Se recomienda separar el entorno del instalador porque `PyInstaller` y `scdatato
 
 #### 1. Extraer el `global.ini` ingles
 
-Desde la carpeta del juego:
+Comando preferido basado en skill:
 
-```bash
-python .\scripts\extract_english_localization.py "D:\RSI\StarCitizen\LIVE"
+```powershell
+.\.codex\skills\sc-global-ini-sync\scripts\extract_global.ps1 -P4K "C:\Program Files\Roberts Space Industries\StarCitizen\LIVE\Data.p4k"
 ```
 
-Tambien acepta una ruta directa al archivo `Data.p4k`.
+Tambien acepta `SC_DATA_P4K` desde el entorno y mantiene los artefactos pesados en `/data/starcitizen/`.
 
 La salida por defecto es:
 
@@ -593,9 +593,9 @@ genera en memoria el `blueprints.ini` compartido efectivo antes de empaquetar.
 
 Scripts utiles:
 
-- `python .\scripts\bootstrap_blueprint_pools.py`
+- `python .\.codex\skills\sc-blueprint-extractor\scripts\maintenance\bootstrap_blueprint_pools.py`
   Genera la fuente estructurada inicial a partir del overlay compartido actual.
-- `python .\scripts\generate_blueprints_overlay.py`
+- `python .\.codex\skills\sc-blueprint-extractor\scripts\maintenance\generate_blueprints_overlay.py`
   Regenera `source/shared/overlays/blueprints.ini` desde la fuente estructurada.
 
 La interfaz del instalador tambien carga sus textos desde archivos externos:
@@ -659,7 +659,7 @@ Ademas, el repo incluye utilidades auxiliares:
   Clasifica problemas relacionados con saltos de linea.
 - `scripts/inspect_mismatch_keys.py`
   Ayuda a inspeccionar claves concretas con incidencias.
-- `scripts/normalize_blueprints_overlay.py`
+- `.codex/skills/sc-blueprint-extractor/scripts/maintenance/normalize_blueprints_overlay.py`
   Sustituye nombres literales dentro de `blueprints.ini` por referencias `@KEY@` para mantener mejor la consistencia.
 
 Ejemplo de chequeo de integridad:
