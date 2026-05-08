@@ -52,18 +52,24 @@ Do not generate large extracted files inside the repository.
 - `source/blueprints/pools.json`
 - Script layout:
   - Core:
+    - `.codex/skills/sc-blueprint-extractor/scripts/core/extract_blueprints.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/core/extract_blueprints.ps1`
     - `.codex/skills/sc-blueprint-extractor/scripts/core/scan_game2_text.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/core/runtime_support.py`
+    - `.codex/skills/sc-blueprint-extractor/scripts/core/dcb_text_support.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/core/blueprint_pool_source.py`
   - Review:
-    - `.codex/skills/sc-blueprint-extractor/scripts/review/discover_new_blueprint_mission_candidates.py`
-    - `.codex/skills/sc-blueprint-extractor/scripts/review/build_blueprint_shortlist.py`
+    - `.codex/skills/sc-blueprint-extractor/scripts/review/blueprint_mission_review.py`
+    - `.codex/skills/sc-blueprint-extractor/scripts/review/run_review_suite.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/review/extract_mission_contract_links.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/review/infer_blueprint_pools_from_contracts.py`
-    - `.codex/skills/sc-blueprint-extractor/scripts/review/discover_blueprint_reward_pools.py`
-    - `.codex/skills/sc-blueprint-extractor/scripts/review/build_blueprint_pool_draft.py`
+    - `.codex/skills/sc-blueprint-extractor/scripts/review/blueprint_reward_pool_review.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/review/extract_blueprint_mission_rewards.py`
+    - Compatibility wrappers:
+      - `.codex/skills/sc-blueprint-extractor/scripts/review/discover_new_blueprint_mission_candidates.py`
+      - `.codex/skills/sc-blueprint-extractor/scripts/review/build_blueprint_shortlist.py`
+      - `.codex/skills/sc-blueprint-extractor/scripts/review/discover_blueprint_reward_pools.py`
+      - `.codex/skills/sc-blueprint-extractor/scripts/review/build_blueprint_pool_draft.py`
   - Maintenance:
     - `.codex/skills/sc-blueprint-extractor/scripts/maintenance/normalize_blueprints_overlay.py`
     - `.codex/skills/sc-blueprint-extractor/scripts/maintenance/generate_blueprints_overlay.py`
@@ -134,6 +140,14 @@ Preferred `Data.p4k` resolution order:
 
 Extract `Game2.dcb` from the current patch using StarBreaker.
 
+Preferred entrypoint:
+
+`python .codex/skills/sc-blueprint-extractor/scripts/core/extract_blueprints.py`
+
+Compatibility wrapper:
+
+`.codex/skills/sc-blueprint-extractor/scripts/core/extract_blueprints.ps1`
+
 Temporary extraction root:
 
 `/data/starcitizen/extracts/current/game2/raw/`
@@ -187,9 +201,9 @@ Generate candidate reports for:
 
 If helper scripts exist, prefer them over reinventing logic:
 
-1. `.codex/skills/sc-blueprint-extractor/scripts/review/discover_new_blueprint_mission_candidates.py`
-2. `.codex/skills/sc-blueprint-extractor/scripts/review/extract_mission_contract_links.py`
-3. `.codex/skills/sc-blueprint-extractor/scripts/review/infer_blueprint_pools_from_contracts.py`
+1. `.codex/skills/sc-blueprint-extractor/scripts/review/run_review_suite.py`
+2. Si solo quieres discovery de nuevas misiones, usa `.codex/skills/sc-blueprint-extractor/scripts/review/blueprint_mission_review.py --mode discover`
+3. Si solo quieres inferencia final por contratos, usa `.codex/skills/sc-blueprint-extractor/scripts/review/infer_blueprint_pools_from_contracts.py`
 
 Inference confidence levels:
 

@@ -7,6 +7,8 @@ import argparse
 import json
 import re
 
+from dcb_text_support import split_strings_with_offsets
+
 
 TITLE_DESC_KEY_RE = re.compile(rb"[A-Za-z0-9_.:-]+_(?:title|desc)(?:_[A-Za-z0-9_.:-]+)?")
 CONTRACT_RE = re.compile(rb"(?:ContractGenerator\.[A-Za-z0-9_.:-]+|contractgenerator/[A-Za-z0-9_./:-]+\.xml)", re.IGNORECASE)
@@ -53,6 +55,15 @@ def find_tokens(data: bytes, pattern: re.Pattern[bytes]) -> dict[str, list[int]]
     return found
 
 
+def find_tokens_in_strings(strings: list[tuple[int, str]], pattern: re.Pattern[str]) -> dict[str, list[int]]:
+    found: dict[str, list[int]] = {}
+    for offset, value in strings:
+        for match in pattern.finditer(value):
+            token = match.group(0)
+            found.setdefault(token, []).append(offset + match.start())
+    return found
+
+
 def nearest_tokens(
     positions: list[int],
     token_map: dict[str, list[int]],
@@ -85,6 +96,7 @@ def main() -> None:
         raise SystemExit(f"Game2.dcb not found: {game2}")
 
     data = game2.read_bytes()
+    strings = split_strings_with_offsets(data)
 
     global_keys = read_ini_keys(global_ini)
     template_keys = read_ini_keys(template)
@@ -94,6 +106,10 @@ def main() -> None:
     missiondata_tokens = find_tokens(data, MISSIONDATA_RE)
     pool_tokens = find_tokens(data, POOL_RE)
     item_tokens = find_tokens(data, ITEM_RE)
+    if not contract_tokens and strings:
+        contract_tokens = find_tokens_in_strings(strings, re.compile(CONTRACT_RE.pattern.decode("ascii"), re.IGNORECASE))
+    if not missiondata_tokens and strings:
+        missiondata_tokens = find_tokens_in_strings(strings, re.compile(MISSIONDATA_RE.pattern.decode("ascii"), re.IGNORECASE))
 
     title_desc_in_global = sorted(key for key in title_desc_tokens if key in global_keys)
     title_desc_missing_from_template = sorted(

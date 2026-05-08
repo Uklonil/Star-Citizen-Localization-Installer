@@ -83,6 +83,22 @@ def split_key_value(line: str) -> tuple[str, str] | None:
     return key, value
 
 
+def parse_entries(lines: list[str]) -> tuple[list[tuple[int, str, str]], dict[str, tuple[int, str]]]:
+    ordered_entries: list[tuple[int, str, str]] = []
+    entry_map: dict[str, tuple[int, str]] = {}
+
+    for line_number, line in enumerate(lines, start=1):
+        pair = split_key_value(line)
+        if pair is None:
+            continue
+        key, value = pair
+        ordered_entries.append((line_number, key, value))
+        if key not in entry_map:
+            entry_map[key] = (line_number, value)
+
+    return ordered_entries, entry_map
+
+
 def flatten_tokens(matches: list[tuple[str, ...]]) -> list[str]:
     return [token for group in matches for token in group if token]
 
@@ -100,6 +116,9 @@ def write_report(
     source: Path,
     translated: Path,
     source_lines: int,
+    source_entries: int,
+    translated_lines: int,
+    translated_total_entries: int,
     translated_entries: int,
     token_protected_entries: int,
     warnings: list[str],
@@ -111,6 +130,9 @@ def write_report(
         f"- Source: `{source}`",
         f"- Translated: `{translated}`",
         f"- Source lines: `{source_lines}`",
+        f"- Source entries: `{source_entries}`",
+        f"- Translated lines: `{translated_lines}`",
+        f"- Translated total entries: `{translated_total_entries}`",
         f"- Translated entries: `{translated_entries}`",
         f"- Token-protected entries: `{token_protected_entries}`",
         f"- Warnings: `{len(warnings)}`",
@@ -184,34 +206,23 @@ def main() -> None:
 
     src_lines = decode_text(src_raw, src).splitlines()
     dst_lines = decode_text(dst_raw, dst).splitlines()
-
-    if len(src_lines) != len(dst_lines):
-        fail(f"Line count differs: source={len(src_lines)} translated={len(dst_lines)}")
+    src_entries, src_entry_map = parse_entries(src_lines)
+    dst_entries, dst_entry_map = parse_entries(dst_lines)
 
     translated_entries = 0
     token_protected_entries = 0
     warnings: list[str] = []
 
-    for i, (src_line, dst_line) in enumerate(zip(src_lines, dst_lines), start=1):
-        src_pair = split_key_value(src_line)
-        dst_pair = split_key_value(dst_line)
+    missing_keys = [key for _line_number, key, _value in src_entries if key not in dst_entry_map]
+    if missing_keys:
+        sample = ", ".join(missing_keys[:10])
+        fail(
+            f"Missing required keys from source: {len(missing_keys)}. "
+            f"Examples: {sample}"
+        )
 
-        if src_pair is None and dst_pair is None:
-            if src_line != dst_line:
-                warnings.append(f"Line {i}: non key-value line changed")
-            continue
-
-        if (src_pair is None) != (dst_pair is None):
-            fail(f"Line {i}: structure changed")
-
-        assert src_pair is not None and dst_pair is not None
-
-        src_key, src_value = src_pair
-        dst_key, dst_value = dst_pair
-
-        if src_key != dst_key:
-            fail(f"Line {i}: key changed from {src_key!r} to {dst_key!r}")
-
+    for src_line_number, src_key, src_value in src_entries:
+        dst_line_number, dst_value = dst_entry_map[src_key]
         src_tokens = extract_tokens(src_value)
         dst_tokens = extract_tokens(dst_value)
 
@@ -220,7 +231,7 @@ def main() -> None:
 
         if src_tokens != dst_tokens:
             fail(
-                f"Line {i}: placeholders/markup changed.\n"
+                f"Key {src_key!r} (source line {src_line_number}, target line {dst_line_number}): placeholders/markup changed.\n"
                 f"  source tokens: {src_tokens}\n"
                 f"  target tokens: {dst_tokens}"
             )
@@ -230,12 +241,20 @@ def main() -> None:
 
         if src_internal_ids != dst_internal_ids:
             warnings.append(
-                f"Line {i}: internal identifiers differ. "
+                f"Key {src_key!r}: internal identifiers differ. "
                 f"source={src_internal_ids} target={dst_internal_ids}"
             )
 
         if src_value != dst_value:
             translated_entries += 1
+
+    extra_keys = [key for _line_number, key, _value in dst_entries if key not in src_entry_map]
+    if extra_keys:
+        sample = ", ".join(extra_keys[:10])
+        warnings.append(
+            f"Translated file contains {len(extra_keys)} extra keys not present in source. "
+            f"Examples: {sample}"
+        )
 
     if args.report:
         write_report(
@@ -243,6 +262,9 @@ def main() -> None:
             src,
             dst,
             len(src_lines),
+            len(src_entries),
+            len(dst_lines),
+            len(dst_entries),
             translated_entries,
             token_protected_entries,
             warnings,
@@ -251,6 +273,9 @@ def main() -> None:
 
     print("OK")
     print(f"Source lines: {len(src_lines)}")
+    print(f"Source entries: {len(src_entries)}")
+    print(f"Translated lines: {len(dst_lines)}")
+    print(f"Translated total entries: {len(dst_entries)}")
     print(f"Translated entries: {translated_entries}")
     print(f"Token-protected entries: {token_protected_entries}")
     print(f"Warnings: {len(warnings)}")

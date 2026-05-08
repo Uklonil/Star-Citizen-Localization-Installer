@@ -8,13 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
-from scdatatools.sc import StarCitizen
-
 CORE_SCRIPTS = Path(__file__).resolve().parents[1] / "core"
 if str(CORE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(CORE_SCRIPTS))
 
-from runtime_support import REPO_ROOT, find_datacore_member
+from dcb_text_support import build_title_index, load_raw_dcb, split_strings_with_offsets
+from runtime_support import REPO_ROOT
 
 
 DEFAULT_SC_ROOT = Path(r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE")
@@ -98,37 +97,6 @@ def collect_template_missions(template_map: dict[str, str], global_map: dict[str
             )
         )
     return missions
-
-
-def load_raw_dcb(sc_root: Path, cache_dir: Path) -> bytes:
-    sc = StarCitizen(sc_root, cache_dir=cache_dir)
-    dcb_member = find_datacore_member(sc)
-    if dcb_member is None:
-        raise FileNotFoundError("No se encontro Data/Game.dcb ni Data/Game2.dcb en la instalacion.")
-    return sc.p4k.getinfo(dcb_member).open("rb").read()
-
-
-def split_strings_with_offsets(raw: bytes) -> list[tuple[int, str]]:
-    strings: list[tuple[int, str]] = []
-    offset = 0
-    for part in raw.split(b"\x00"):
-        if part:
-            try:
-                value = part.decode("utf-8")
-            except UnicodeDecodeError:
-                value = None
-            if value:
-                strings.append((offset, value))
-        offset += len(part) + 1
-    return strings
-
-
-def build_title_index(strings: list[tuple[int, str]]) -> dict[str, int]:
-    index: dict[str, int] = {}
-    for offset, value in strings:
-        if value.startswith("@") and value not in index:
-            index[value[1:]] = offset
-    return index
 
 
 def extract_nearby_paths(
@@ -490,7 +458,10 @@ def main() -> int:
     shortlist_missions = parse_shortlist(Path(args.shortlist).expanduser().resolve(), global_map)
     template_missions = collect_template_missions(template_map, global_map)
     known_desc_pools = resolve_known_pools(template_map, pools_data)
-    raw = load_raw_dcb(Path(args.sc_root).expanduser().resolve(), Path(args.cache_dir).expanduser().resolve())
+    _dcb_member, raw = load_raw_dcb(
+        Path(args.sc_root).expanduser().resolve(),
+        Path(args.cache_dir).expanduser().resolve(),
+    )
     strings = split_strings_with_offsets(raw)
     build_report(
         template_missions=template_missions,

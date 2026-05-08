@@ -5,13 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
-from scdatatools.sc import StarCitizen
-
 CORE_SCRIPTS = Path(__file__).resolve().parents[1] / "core"
 if str(CORE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(CORE_SCRIPTS))
 
-from runtime_support import REPO_ROOT, find_datacore_member
+from dcb_text_support import build_title_index, load_raw_dcb, split_strings_with_offsets
+from runtime_support import REPO_ROOT
 
 
 DEFAULT_SC_ROOT = Path(r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE")
@@ -77,29 +76,6 @@ def parse_shortlist_title_keys(path: Path) -> set[str]:
     return keys
 
 
-def load_raw_dcb(sc_root: Path, cache_dir: Path) -> bytes:
-    sc = StarCitizen(sc_root, cache_dir=cache_dir)
-    dcb_member = find_datacore_member(sc)
-    if dcb_member is None:
-        raise FileNotFoundError("No se encontro Data/Game.dcb ni Data/Game2.dcb en la instalacion.")
-    return sc.p4k.getinfo(dcb_member).open("rb").read()
-
-
-def split_strings_with_offsets(raw: bytes) -> list[tuple[int, str]]:
-    strings: list[tuple[int, str]] = []
-    offset = 0
-    for part in raw.split(b"\x00"):
-        if part:
-            try:
-                value = part.decode("utf-8")
-            except UnicodeDecodeError:
-                value = None
-            if value:
-                strings.append((offset, value))
-        offset += len(part) + 1
-    return strings
-
-
 def classify_string(value: str) -> bool:
     lower = value.lower()
     return (
@@ -109,14 +85,6 @@ def classify_string(value: str) -> bool:
         or "contractgenerator/" in lower
         or "missiondata/" in lower
     )
-
-
-def build_title_index(strings: list[tuple[int, str]]) -> dict[str, int]:
-    index: dict[str, int] = {}
-    for offset, value in strings:
-        if value.startswith("@") and value not in index:
-            index[value[1:]] = offset
-    return index
 
 
 def find_context(
@@ -216,7 +184,7 @@ def main() -> int:
     global_map = read_ini_map(global_ini)
     template_map = read_ini_map(template)
     title_keys_filter = parse_shortlist_title_keys(shortlist) if shortlist.is_file() else None
-    raw = load_raw_dcb(sc_root=sc_root, cache_dir=cache_dir)
+    _dcb_member, raw = load_raw_dcb(sc_root=sc_root, cache_dir=cache_dir)
     strings = split_strings_with_offsets(raw)
     build_report(
         global_map=global_map,
