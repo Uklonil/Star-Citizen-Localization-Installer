@@ -160,7 +160,8 @@ def build_discovery_report(
         lines.append("")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
 def choose_candidate_pool(title_key: str, pools: list[str]) -> tuple[str | None, int]:
@@ -348,7 +349,8 @@ def build_draft_report(
         lines.append("")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
 def run_discovery(

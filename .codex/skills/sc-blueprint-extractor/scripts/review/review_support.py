@@ -4,7 +4,10 @@ import re
 import sys
 from pathlib import Path
 
-from scdatatools.sc import StarCitizen
+try:
+    from scdatatools.sc import StarCitizen
+except ModuleNotFoundError:  # pragma: no cover - optional at runtime
+    StarCitizen = None
 
 
 CORE_SCRIPTS = Path(__file__).resolve().parents[1] / "core"
@@ -22,6 +25,7 @@ from localization_tools import read_global_ini
 
 DEFAULT_SC_ROOT = Path(r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE")
 DEFAULT_CACHE_DIR = REPO_ROOT / ".scdt-cache"
+DEFAULT_EXTRACTED_GAME2 = REPO_ROOT / "data" / "starcitizen" / "extracts" / "current" / "game2" / "Game2.dcb"
 
 POOL_RE = re.compile(rb"BP_MISSIONREWARD_[A-Za-z0-9_]+")
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
@@ -64,12 +68,24 @@ def family_name_from_title_key(title_key: str) -> str:
     return key.strip("_")
 
 
-def extract_pools(sc_root: Path, cache_dir: Path) -> tuple[str, list[str]]:
+def load_raw_datacore(sc_root: Path, cache_dir: Path) -> tuple[str, bytes]:
+    if DEFAULT_EXTRACTED_GAME2.exists():
+        return str(DEFAULT_EXTRACTED_GAME2), DEFAULT_EXTRACTED_GAME2.read_bytes()
+
+    if StarCitizen is None:
+        raise ModuleNotFoundError(
+            "scdatatools no esta disponible y no existe un Game2.dcb extraido en "
+            f"{DEFAULT_EXTRACTED_GAME2}."
+        )
+
     sc = StarCitizen(sc_root, cache_dir=cache_dir)
     member = find_datacore_member(sc)
     if member is None:
         raise FileNotFoundError("No se encontro Data/Game.dcb ni Data/Game2.dcb en la instalacion.")
+    return member, sc.p4k.getinfo(member).open("rb").read()
 
-    raw = sc.p4k.getinfo(member).open("rb").read()
+
+def extract_pools(sc_root: Path, cache_dir: Path) -> tuple[str, list[str]]:
+    member, raw = load_raw_datacore(sc_root, cache_dir)
     pools = sorted({match.group(0).decode("ascii") for match in POOL_RE.finditer(raw)})
     return member, pools

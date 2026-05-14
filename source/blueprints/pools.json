@@ -166,6 +166,36 @@
         "item_Namebehr_rifle_ballistic_02_civilian"
       ]
     },
+    "BP_REWARDS_EckhartSecurityEscortShipsEasy": {
+      "item_refs": [
+        "item_NameSHLD_ASAS_S01_Shimmer",
+        "item_Name_SHLD_ASAS_S02_Obscura",
+        "item_NameBEHR_LaserCannon_S1",
+        "item_NameBEHR_LaserCannon_S2",
+        "item_NameBEHR_LaserCannon_S3"
+      ]
+    },
+    "BP_REWARDS_EckhartSecurityKillNPCBoss": {
+      "item_refs": [
+        "item_NamePOWR_AEGS_S01_FierellCascade_SCItem",
+        "item_NamePOWR_AMRS_S02_UltraFlux_SCItem",
+        "item_Name_POWR_AMRS_S03_MegaFlux",
+        "item_NameBEHR_BallisticCannon_S4",
+        "item_NameKRIG_BallisticGatling_S2",
+        "item_NameAPAR_BallisticGatling_S4",
+        "item_NameAPAR_BallisticGatling_S6"
+      ]
+    },
+    "BP_REWARDS_FTL": {
+      "item_refs": [
+        "item_Name_QDRV_JUST_S01_Colossus",
+        "item_NameQDRV_JUST_S02_Huracan_SCItem",
+        "item_NameQDRV_JUST_S03_Agni_SCItem",
+        "item_Name_POWR_JUST_S00_Defiant",
+        "item_NamePOWR_JUST_S01_Endurance_SCItem",
+        "item_Name_POWR_JUST_S02_Sedulity"
+      ]
+    },
     "BP_MISSIONREWARD_CFP_ChainElim_1and2": {
       "item_refs": [
         "item_Name_qrt_specialist_medium_arms_01_01_15",
@@ -267,6 +297,11 @@
         "item_Name_qrt_specialist_medium_legs_01_01_16",
         "item_Nameksar_rifle_energy_01_cian_black01",
         "item_Nameksar_rifle_energy_01_mag"
+      ]
+    },
+    "BP_MISSIONREWARD_Carryable_2H_FL_MissionItem_Microsatellite_a": {
+      "item_refs": [
+        "mission_item_0077"
       ]
     },
     "BP_MISSIONREWARD_CitizensForProsperityDestroyItems_AB": {
@@ -1036,6 +1071,12 @@
     "blackbox_recover_desc_VE_001": "BP_MISSIONREWARD_BitZeros_BlackBoxRecovery",
     "blackbox_recover_desc_VH_001": "BP_MISSIONREWARD_BitZeros_BlackBoxRecovery",
     "blackbox_recover_desc_intro_001": "BP_MISSIONREWARD_BitZeros_BlackBoxRecovery",
+    "CDF_Phase3_A_Desc": "BP_MISSIONREWARD_Carryable_2H_FL_MissionItem_Microsatellite_a",
+    "EckhartSecurity_EliminateBoss_DC_Desc_001": "BP_REWARDS_EckhartSecurityKillNPCBoss",
+    "Eckhart_EscortShips_E_desc": "BP_REWARDS_EckhartSecurityEscortShipsEasy",
+    "Eckhart_EscortShips_VE_desc": "BP_REWARDS_EckhartSecurityEscortShipsEasy",
+    "FTL_Courier_Stanton_Easy_Desc_001": "BP_REWARDS_FTL",
+    "FTL_Courier_Stanton_Medium_Desc_001": "BP_REWARDS_FTL",
     "cfp_ChainElimAll_1C_ElimSpec_GenAttack_E_desc_001": "BP_MISSIONREWARD_CFP_ChainElim_1and2",
     "cfp_ChainElimAll_1C_ElimSpec_HHAttack_M_desc_001": "BP_MISSIONREWARD_CFP_ChainElim_1and2",
     "cfp_ChainElimAll_1C_HHAttack_M_desc_001": "BP_MISSIONREWARD_CFP_ChainElim_3",

@@ -7,7 +7,7 @@ from pathlib import Path
 from runtime_support import REPO_ROOT
 from localization_tools import Entry, GlobalIniData, read_global_ini
 
-POOL_TOKEN_RE = re.compile(r"@((?:BP_MISSIONREWARD|OVERLAY_)[A-Za-z0-9_]+(?:__\d+)?)@")
+POOL_TOKEN_RE = re.compile(r"@((?:BP_MISSIONREWARD|BP_REWARDS|OVERLAY_)[A-Za-z0-9_]+(?:__\d+)?)@")
 GENERIC_BLUEPRINT_BLOCK_PREFIX = "\\n\\n\\n\\n<EM4>##potential_blueprints##</EM4>\\n"
 
 
