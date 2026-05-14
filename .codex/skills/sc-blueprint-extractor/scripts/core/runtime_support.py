@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from scdatatools.sc import StarCitizen
+if TYPE_CHECKING:
+    from scdatatools.sc import StarCitizen
+else:
+    StarCitizen = Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
