@@ -144,7 +144,8 @@ def build_discovery_report(
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
 def parse_candidate_rows(lines: list[str]) -> list[tuple[str, str, str, str, str]]:
@@ -201,7 +202,8 @@ def build_shortlist_report(*, output_path: Path, source_name: str, rows: list[tu
     out_lines.append("")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text("\n".join(out_lines), encoding="utf-8", newline="\n")
+    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("\n".join(out_lines))
 
 
 def run_discovery(

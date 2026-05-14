@@ -23,9 +23,14 @@ DEFAULT_TEMPLATE = REPO_ROOT / "source" / "blueprints" / "blueprints_template.in
 DEFAULT_POOLS = REPO_ROOT / "source" / "blueprints" / "pools.json"
 DEFAULT_SHORTLIST = REPO_ROOT / "informes" / "BLUEPRINTS_NEW_MISSION_CANDIDATES_SHORTLIST.md"
 DEFAULT_OUTPUT = REPO_ROOT / "informes" / "BLUEPRINTS_CONTRACT_TO_POOL_INFERENCE.md"
+DEFAULT_EXPORTED_ROOT = REPO_ROOT / "data" / "starcitizen" / "extracts" / "current" / "game2" / "exported"
 
-POOL_TOKEN_RE = re.compile(r"@(?P<pool>BP_MISSIONREWARD_[A-Za-z0-9_]+)@")
+POOL_TOKEN_RE = re.compile(r"@(?P<pool>(?:BP_MISSIONREWARD|BP_REWARDS)_[A-Za-z0-9_]+)@")
 TITLE_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+BLUEPRINT_POOL_PATH_RE = re.compile(
+    r"libs/foundry/records/crafting/blueprintrewards/(?P<subdir>.+?)/(?P<name>[^/]+)\.json$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +53,15 @@ class HardenedInference:
     reason: str
 
 
+@dataclass(frozen=True)
+class ExportedContractLink:
+    title_keys: tuple[str, ...]
+    desc_keys: tuple[str, ...]
+    pool_ids: tuple[str, ...]
+    template_path: str | None
+    source_path: str
+
+
 def read_ini_map(path: Path) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
@@ -56,6 +70,178 @@ def read_ini_map(path: Path) -> dict[str, str]:
         key, value = raw_line.split("=", 1)
         mapping[key] = value
     return mapping
+
+
+def _strip_loc_token(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    if not value.startswith("@"):
+        return None
+    token = value.strip().strip("@")
+    if not token or token.startswith("LOC_"):
+        return None
+    return token
+
+
+def _walk_objects(payload: object) -> list[dict]:
+    found: list[dict] = []
+    stack: list[object] = [payload]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            found.append(current)
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+    return found
+
+
+def _resolve_exported_path(record_path: str, exported_root: Path) -> Path | None:
+    match = BLUEPRINT_POOL_PATH_RE.search(record_path.replace("\\", "/"))
+    if not match:
+        return None
+    return exported_root / "libs" / "foundry" / "records" / "crafting" / "blueprintrewards" / match.group("subdir") / f"{match.group('name')}.json"
+
+
+def _resolve_pool_id(record_path: str, exported_root: Path, cache: dict[str, str | None]) -> str | None:
+    cached = cache.get(record_path)
+    if record_path in cache:
+        return cached
+    exported_path = _resolve_exported_path(record_path, exported_root)
+    if exported_path is None or not exported_path.exists():
+        cache[record_path] = None
+        return None
+    try:
+        payload = json.loads(exported_path.read_text(encoding="utf-8"))
+    except Exception:
+        cache[record_path] = None
+        return None
+    record_name = payload.get("_RecordName_")
+    if not isinstance(record_name, str) or "." not in record_name:
+        cache[record_path] = None
+        return None
+    pool_id = record_name.split(".", 1)[1]
+    cache[record_path] = pool_id
+    return pool_id
+
+
+def _extract_template_display_strings(template_path: str | None, exported_root: Path, cache: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    if not template_path:
+        return ()
+    cached = cache.get(template_path)
+    if cached is not None:
+        return cached
+    normalized = template_path.replace("\\", "/")
+    prefix = "file://./../../../../../"
+    if normalized.startswith(prefix):
+        relative = normalized[len(prefix):]
+        local_path = exported_root / relative.replace("/", "\\")
+    else:
+        local_path = exported_root / normalized
+    if not local_path.exists():
+        cache[template_path] = ()
+        return ()
+    try:
+        payload = json.loads(local_path.read_text(encoding="utf-8"))
+    except Exception:
+        cache[template_path] = ()
+        return ()
+    display = (
+        payload.get("_RecordValue_", {})
+        .get("contractDisplayInfo", {})
+        .get("displayString", [])
+    )
+    tokens = tuple(
+        token
+        for token in (_strip_loc_token(value) for value in display)
+        if token is not None
+    )
+    cache[template_path] = tokens
+    return tokens
+
+
+def collect_exported_contract_links(exported_root: Path) -> list[ExportedContractLink]:
+    contract_root = exported_root / "libs" / "foundry" / "records" / "contracts" / "contractgenerator"
+    if not contract_root.exists():
+        return []
+
+    template_cache: dict[str, tuple[str, ...]] = {}
+    pool_cache: dict[str, str | None] = {}
+    links: list[ExportedContractLink] = []
+
+    for path in sorted(contract_root.rglob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        for node in _walk_objects(payload):
+            if "contractResults" not in node and "paramOverrides" not in node and "template" not in node:
+                continue
+
+            template_path = node.get("template") if isinstance(node.get("template"), str) else None
+            title_keys: list[str] = []
+            desc_keys: list[str] = []
+
+            param_overrides = node.get("paramOverrides")
+            if isinstance(param_overrides, dict):
+                for override in param_overrides.get("stringParamOverrides", []):
+                    if not isinstance(override, dict):
+                        continue
+                    token = _strip_loc_token(override.get("value"))
+                    if token is None:
+                        continue
+                    param = override.get("param")
+                    if param == "Title":
+                        title_keys.append(token)
+                    elif param == "Description":
+                        desc_keys.append(token)
+
+            if not title_keys and not desc_keys:
+                template_tokens = _extract_template_display_strings(template_path, exported_root, template_cache)
+                if template_tokens:
+                    title_keys.extend(template_tokens[:2])
+                    if len(template_tokens) >= 3:
+                        desc_keys.append(template_tokens[2])
+
+            pool_ids: list[str] = []
+            contract_results = node.get("contractResults")
+            if isinstance(contract_results, dict):
+                for result in _walk_objects(contract_results):
+                    blueprint_pool_path = result.get("blueprintPool")
+                    if not isinstance(blueprint_pool_path, str):
+                        continue
+                    pool_id = _resolve_pool_id(blueprint_pool_path, exported_root, pool_cache)
+                    if pool_id:
+                        pool_ids.append(pool_id)
+
+            title_keys = list(dict.fromkeys(title_keys))
+            desc_keys = list(dict.fromkeys(desc_keys))
+            pool_ids = list(dict.fromkeys(pool_ids))
+            if not pool_ids or (not title_keys and not desc_keys):
+                continue
+
+            links.append(
+                ExportedContractLink(
+                    title_keys=tuple(title_keys),
+                    desc_keys=tuple(desc_keys),
+                    pool_ids=tuple(pool_ids),
+                    template_path=template_path,
+                    source_path=str(path.relative_to(exported_root)).replace("\\", "/"),
+                )
+            )
+
+    return links
+
+
+def build_direct_exported_pool_map(links: list[ExportedContractLink]) -> tuple[dict[str, Counter[str]], dict[str, list[ExportedContractLink]]]:
+    counters: dict[str, Counter[str]] = defaultdict(Counter)
+    sources: dict[str, list[ExportedContractLink]] = defaultdict(list)
+    for link in links:
+        for key in (*link.title_keys, *link.desc_keys):
+            counters[key].update(link.pool_ids)
+            sources[key].append(link)
+    return counters, sources
 
 
 def parse_shortlist(path: Path, global_map: dict[str, str]) -> list[MissionInfo]:
@@ -248,9 +434,12 @@ def build_report(
     template_map: dict[str, str],
     known_desc_pools: dict[str, str],
     strings: list[tuple[int, str]],
+    exported_root: Path,
     output_path: Path,
 ) -> str:
     title_index = build_title_index(strings)
+    exported_links = collect_exported_contract_links(exported_root)
+    direct_pool_map, direct_pool_sources = build_direct_exported_pool_map(exported_links)
 
     contract_to_pools: dict[str, Counter[str]] = defaultdict(Counter)
     contract_missiondata_to_pools: dict[tuple[str, tuple[str, ...]], Counter[str]] = defaultdict(Counter)
@@ -267,6 +456,7 @@ def build_report(
             contract_missiondata_to_pools[(contract_path, signals.missiondata_paths)][pool] += 1
             contract_missiondata_pool_titles[(contract_path, signals.missiondata_paths, pool)].append(mission.title_key)
 
+    inferred_direct: list[tuple[MissionInfo, tuple[str, ...], list[ExportedContractLink]]] = []
     inferred_strict: list[tuple[MissionInfo, str, str, tuple[str, ...], Counter[str]]] = []
     inferred_contract_only: list[tuple[MissionInfo, str, str, Counter[str]]] = []
     inferred_hardened: list[tuple[MissionInfo, HardenedInference, MissionSignals]] = []
@@ -274,6 +464,20 @@ def build_report(
     missing_contract: list[MissionInfo] = []
 
     for mission in shortlist_missions:
+        direct_counter = Counter()
+        direct_sources: list[ExportedContractLink] = []
+        for key in (mission.title_key, mission.desc_key):
+            if not key:
+                continue
+            direct_counter.update(direct_pool_map.get(key, Counter()))
+            direct_sources.extend(direct_pool_sources.get(key, []))
+        direct_unique = sorted(direct_counter)
+        if direct_unique:
+            direct_sources = list(dict.fromkeys(direct_sources))
+            if len(direct_unique) == 1:
+                inferred_direct.append((mission, tuple(direct_unique), direct_sources))
+                continue
+
         signals = build_signals(strings, title_index, mission.title_key)
         if not signals.contract_paths:
             missing_contract.append(mission)
@@ -315,12 +519,29 @@ def build_report(
     lines.append("")
     lines.append("Resumen:")
     lines.append(f"- Misiones template evaluadas: {len(template_missions)}")
+    lines.append(f"- Enlaces directos exportados (`title/desc -> blueprintPool`): {len(exported_links)}")
     lines.append(f"- Contratos con al menos una pool observada: {len(contract_to_pools)}")
+    lines.append(f"- Misiones nuevas con inferencia directa desde export JSON: {len(inferred_direct)}")
     lines.append(f"- Misiones nuevas con inferencia unica estricta (contrato + missiondata): {len(inferred_strict)}")
     lines.append(f"- Misiones nuevas con inferencia unica solo por contrato: {len(inferred_contract_only)}")
     lines.append(f"- Misiones nuevas resueltas por endurecimiento especifico de familia: {len(inferred_hardened)}")
     lines.append(f"- Misiones nuevas con contrato pero varias pools posibles: {len(ambiguous)}")
     lines.append(f"- Misiones nuevas sin contrato util o sin aprendizaje previo: {len(missing_contract)}")
+    lines.append("")
+
+    lines.append("## Inferencias Directas Desde Export JSON")
+    lines.append("")
+    if inferred_direct:
+        lines.append("| Titulo ingles | `title` | `desc` | Pool inferida | Fuentes |")
+        lines.append("|---|---|---|---|---|")
+        for mission, pools, sources in inferred_direct:
+            rendered_pools = "<br>".join(f"`{pool}`" for pool in pools)
+            rendered_sources = "<br>".join(f"`{source.source_path}`" for source in sources[:4])
+            lines.append(
+                f"| `{mission.english_title}` | `{mission.title_key}` | `{mission.desc_key or 'n/d'}` | {rendered_pools} | {rendered_sources} |"
+            )
+    else:
+        lines.append("Sin inferencias directas.")
     lines.append("")
 
     lines.append("## Contrato + Missiondata A Pool")
@@ -449,6 +670,7 @@ def main() -> int:
     parser.add_argument("--template", default=str(DEFAULT_TEMPLATE))
     parser.add_argument("--pools", default=str(DEFAULT_POOLS))
     parser.add_argument("--shortlist", default=str(DEFAULT_SHORTLIST))
+    parser.add_argument("--exported-root", default=str(DEFAULT_EXPORTED_ROOT))
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     args = parser.parse_args()
 
@@ -469,6 +691,7 @@ def main() -> int:
         template_map=template_map,
         known_desc_pools=known_desc_pools,
         strings=strings,
+        exported_root=Path(args.exported_root).expanduser().resolve(),
         output_path=Path(args.output).expanduser().resolve(),
     )
     print(Path(args.output).expanduser().resolve())
