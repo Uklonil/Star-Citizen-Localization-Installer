@@ -10,7 +10,8 @@ Use this skill for localization files such as `.ini`, `.cfg`, `.json`, `.xml`, a
 Use this skill when the task involves:
 - translating game strings
 - creating a new language file from an existing source file
-- updating a translated file from an upstream English file
+- translating newly added localization entries
+- translating existing untranslated entries
 - reviewing localization diffs for formatting safety
 
 # Main workflow
@@ -74,3 +75,35 @@ Use the translate-loc skill to translate `Data/Localization/english/global.ini` 
 Keep keys and placeholders intact, save it to `Data/Localization/spanish/global.ini`,
 then run validation and report ambiguous strings.
 ```
+# Safety mode
+
+If uncertain whether a token, ID, markup fragment, placeholder, or inline structure is user-facing text:
+
+- preserve the original text
+- report it as ambiguous instead of translating it
+
+# Star Citizen-specific rules
+
+Never translate:
+- mission IDs
+- item IDs
+- internal pool names
+- blueprint identifiers
+- `item_port_*`
+- `vehicle_*`
+- `contractgenerator/*`
+- `missiondata/*`
+- `BP_MISSIONREWARD_*`
+- `OVERLAY_*`
+
+# Translation scopes
+
+Possible scopes:
+- full-file
+- batch
+- missing-only
+- diff-only
+- overlay-only
+
+Default scope:
+- full-file

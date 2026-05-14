@@ -10,6 +10,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+SKILL_BLUEPRINT_SCRIPTS = REPO_ROOT / ".codex" / "skills" / "sc-blueprint-extractor" / "scripts" / "core"
+if str(SKILL_BLUEPRINT_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SKILL_BLUEPRINT_SCRIPTS))
 
 from scripts.language_support import (
     SourceLanguage,
@@ -17,7 +20,7 @@ from scripts.language_support import (
     find_source_language,
     write_staged_language_metadata,
 )
-from scripts.blueprint_pool_source import (
+from blueprint_pool_source import (
     default_blueprint_source_paths,
     generate_blueprints_overlay_data,
 )
@@ -43,10 +46,16 @@ PLACEHOLDER_RE = re.compile(
     r"|(\[\[.*?\]\])"
     r"|(</?EM[1-4]>)"
 )
+KNOWN_EM_TAG_TYPO_RE = re.compile(r"(<EM([1-4])>~mission\([^<\r\n]+\))<EM\2>")
+
+
+def normalize_known_markup_typos(value: str) -> str:
+    return KNOWN_EM_TAG_TYPO_RE.sub(r"\1</EM\2>", value)
 
 
 def extract_tokens(value: str) -> list[str]:
-    matches = PLACEHOLDER_RE.findall(value)
+    normalized_value = normalize_known_markup_typos(value)
+    matches = PLACEHOLDER_RE.findall(normalized_value)
     return [token for group in matches for token in group if token]
 
 
@@ -364,6 +373,7 @@ def main() -> int:
                     english_map=english_data.mapping,
                     candidate_map=translation_map,
                     label=f"Master memory {language.code}",
+                    allow_unknown_keys=True,
                 )
             )
         validation_errors.extend(
@@ -440,6 +450,15 @@ def main() -> int:
                 )
             )
 
+        reported_missing_entries = [] if language.use_english_source_as_base else base_merge.missing
+        reported_missing_count = 0 if language.use_english_source_as_base else base_merge.missing_count
+        if reported_missing_count > 0 and not args.allow_empty_translation_memory:
+            sample = ", ".join(entry.key for entry in reported_missing_entries[:10])
+            validation_errors.append(
+                f"The master memory for {language.code} is missing {reported_missing_count} keys from the current global.ini. "
+                f"Examples: {sample}"
+            )
+
         if validation_errors:
             raise ValueError("\n".join(validation_errors))
 
@@ -460,9 +479,6 @@ def main() -> int:
                 game_language=language.game_language,
                 user_cfg_source=user_cfg_absolute,
             )
-
-        reported_missing_entries = [] if language.use_english_source_as_base else base_merge.missing
-        reported_missing_count = 0 if language.use_english_source_as_base else base_merge.missing_count
 
         missing_report_path = reports_root / f"missing-keys-{language.code}.ini"
         write_global_ini(entries=reported_missing_entries, path=missing_report_path)

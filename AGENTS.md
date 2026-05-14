@@ -49,3 +49,5 @@ After editing a localization file:
 For large files, work in batches instead of rewriting everything at once.
 Default batch size: 100 to 250 lines unless the user requests otherwise.
 Run validation after each batch and once again at the end.
+
+Never scan `/informes/` or `/data/starcitizen/archive/` unless explicitly requested.
