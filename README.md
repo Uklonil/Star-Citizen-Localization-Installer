@@ -264,6 +264,11 @@ Each ZIP package contains:
 - `user.cfg`
 - `data/Localization/<game_language>/global.ini`
 
+Encoding note:
+
+- the packaged `global.ini` for Star Citizen is intentionally written as UTF-8 with BOM to match the game expectations and avoid mojibake;
+- installer metadata such as `manifest.json`, `_metadata/version.txt`, and `installer/ui_texts/*.json` are not game assets and must remain readable by the installer JSON/text loaders, which therefore need to tolerate BOM when present.
+
 ### Included validations
 
 `scripts/build_distributions.py` validates before packaging:
@@ -333,6 +338,11 @@ Expected output:
 dist-installer/StarCitizenLocalizationInstaller.exe
 ```
 
+Installer encoding boundary:
+
+- keep BOM requirements for game-facing localization files such as `data/Localization/<game_language>/global.ini`;
+- do not assume the same requirement for installer metadata or release artifacts just because they are shipped alongside the installer.
+
 You can also open the app directly in script mode:
 
 ```bash
@@ -357,6 +367,11 @@ You can also open the app directly in script mode:
   2. Commit the extracted `input/current/global.ini` and the localization changes for that patch.
   3. Merge `develop` into `main`.
   4. Let the workflow build packages, the installer, the manifest, and the GitHub release from that merge commit.
+
+Release encoding note:
+
+- a GitHub release may contain both game assets and installer metadata;
+- `global.ini` should keep UTF-8 with BOM, while release metadata must be validated from the installer side as JSON/text inputs and not treated as if Star Citizen were going to read them directly.
 
 ### Support and additional info
 
@@ -640,6 +655,11 @@ Cada paquete ZIP contiene:
 - `user.cfg`
 - `data/Localization/<game_language>/global.ini`
 
+Nota de codificacion:
+
+- el `global.ini` empaquetado para Star Citizen se escribe a proposito en UTF-8 con BOM para ajustarse a lo que espera el juego y evitar mojibake;
+- los metadatos del instalador, como `manifest.json`, `_metadata/version.txt` e `installer/ui_texts/*.json`, no son assets del juego y deben seguir siendo legibles por los cargadores JSON/texto del instalador, que por tanto deben tolerar BOM si aparece.
+
 ### Validaciones incluidas
 
 `scripts/build_distributions.py` valida antes de empaquetar:
@@ -709,6 +729,11 @@ Salida esperada:
 dist-installer/StarCitizenLocalizationInstaller.exe
 ```
 
+Limite de codificacion del instalador:
+
+- conserva el requisito de BOM para los archivos de localizacion que consume el juego, como `data/Localization/<game_language>/global.ini`;
+- no asumas ese mismo requisito para los metadatos del instalador o para los artefactos de release solo porque se publiquen junto al instalador.
+
 Tambien puedes abrir la app directamente en modo script:
 
 ```bash
@@ -733,6 +758,11 @@ Tambien puedes abrir la app directamente en modo script:
   2. Sube `input/current/global.ini` extraido y los cambios de localizacion del parche.
   3. Fusiona `develop` en `main`.
   4. Deja que el workflow construya paquetes, instalador, manifiesto y release de GitHub a partir de ese merge commit.
+
+Nota de codificacion para releases:
+
+- una release de GitHub puede mezclar assets del juego y metadatos del instalador;
+- `global.ini` debe conservar UTF-8 con BOM, mientras que los metadatos de release deben validarse desde el lado del instalador como entradas JSON/texto y no tratarse como si Star Citizen fuese a leerlos directamente.
 
 ### Soporte e informacion adicional
 

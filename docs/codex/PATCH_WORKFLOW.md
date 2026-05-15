@@ -10,5 +10,5 @@
 6. Regenerate generated overlays.
 7. Build distributions.
 8. Review build reports.
-9. Optionally build installer.
+9. Optionally build installer, keeping the encoding boundary clear: `global.ini` remains UTF-8 with BOM for Star Citizen, installer metadata must remain parseable as installer JSON/text inputs.
 10. Update local project memory.
