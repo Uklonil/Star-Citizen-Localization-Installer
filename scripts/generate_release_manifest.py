@@ -135,7 +135,7 @@ def main() -> int:
         }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8", newline="\n") as file_handle:
+    with output_path.open("w", encoding="utf-8-sig", newline="\n") as file_handle:
         json.dump(payload, file_handle, ensure_ascii=True, indent=2)
         file_handle.write("\n")
 
