@@ -108,7 +108,7 @@ def _load_ui_text_file(language_code: str) -> dict[str, str]:
         _UI_CACHE[language_code] = {}
         return _UI_CACHE[language_code]
 
-    data = json.loads(ui_file.read_text(encoding="utf-8"))
+    data = json.loads(ui_file.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict):
         raise ValueError(f"El fichero de UI no contiene un objeto JSON valido: {ui_file}")
 
@@ -654,7 +654,7 @@ def main(page: ft.Page) -> None:
                     set_busy(False)
                     return
 
-                result_payload = json.loads(result_file.read_text(encoding="utf-8"))
+                result_payload = json.loads(result_file.read_text(encoding="utf-8-sig"))
                 result_file.unlink(missing_ok=True)
 
                 if exit_code != 0 or not result_payload.get("ok"):

@@ -127,7 +127,7 @@ def _http_get_bytes(url: str) -> bytes:
 
 
 def _http_get_json(url: str) -> dict:
-    payload = json.loads(_http_get_bytes(url).decode("utf-8"))
+    payload = json.loads(_http_get_bytes(url).decode("utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError(f"La respuesta remota no es un objeto JSON valido: {url}")
     return payload
@@ -161,7 +161,7 @@ def _compute_sha256(path: Path) -> str:
 def _read_cached_manifest(path: Path) -> dict | None:
     if not path.is_file():
         return None
-    with path.open("r", encoding="utf-8") as file_handle:
+    with path.open("r", encoding="utf-8-sig") as file_handle:
         payload = json.load(file_handle)
     if not isinstance(payload, dict):
         return None
@@ -382,7 +382,7 @@ def discover_languages(root: Path, *, bundle_version: str) -> dict[str, Language
 def read_bundle_version(root: Path) -> str:
     version_file = root / "_metadata" / "version.txt"
     if version_file.is_file():
-        return version_file.read_text(encoding="utf-8").strip() or "desconocida"
+        return version_file.read_text(encoding="utf-8-sig").strip() or "desconocida"
     return "desconocida"
 
 
