@@ -46,7 +46,7 @@ def prepare_assets(version_dir: Path) -> Path:
     shutil.copytree(staging_dir, assets_root)
     metadata_dir = assets_root / "_metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
-    with (metadata_dir / "version.txt").open("w", encoding="utf-8", newline="\n") as file_handle:
+    with (metadata_dir / "version.txt").open("w", encoding="utf-8-sig", newline="\n") as file_handle:
         file_handle.write(version_dir.name)
     return assets_root
 

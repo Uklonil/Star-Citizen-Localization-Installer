@@ -497,7 +497,7 @@ def main() -> int:
     summary_lines.append("")
 
     summary_path = reports_root / "summary.txt"
-    with summary_path.open("w", encoding="utf-8", newline="\n") as file_handle:
+    with summary_path.open("w", encoding="utf-8-sig", newline="\n") as file_handle:
         file_handle.write("\n".join(summary_lines))
 
     print(f"Completed build for version {args.version}")

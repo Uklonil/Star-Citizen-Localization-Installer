@@ -142,7 +142,7 @@ def write_staged_language_metadata(*, root: Path, language: SourceLanguage) -> N
         "label": language.label,
         "game_language": language.game_language,
     }
-    with metadata_path.open("w", encoding="utf-8", newline="\n") as file_handle:
+    with metadata_path.open("w", encoding="utf-8-sig", newline="\n") as file_handle:
         json.dump(payload, file_handle, ensure_ascii=True, indent=2)
         file_handle.write("\n")
 

@@ -36,6 +36,9 @@ jobs:
         github.event.pull_request.head.ref == 'develop'
       )
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
 
     steps:
       - name: Checkout repository
@@ -53,6 +56,8 @@ jobs:
       - name: Resolve build version and inputs
         shell: pwsh
         run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           $manualVersion = "${{ github.event.inputs.version }}"
           if ($manualVersion) {
             $version = $manualVersion.Trim()
@@ -79,6 +84,8 @@ jobs:
       - name: Check required English global.ini exists
         shell: pwsh
         run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           if (-not (Test-Path "$env:ENGLISH_GLOBAL_INI")) {
             Write-Error "Missing required file '$env:ENGLISH_GLOBAL_INI' in the repository checkout. Extract it locally first and commit/push it before running this workflow."
           }
@@ -86,11 +93,15 @@ jobs:
       - name: Build distribution packages
         shell: pwsh
         run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           python .\scripts\build_distributions.py --english-global-ini "$env:ENGLISH_GLOBAL_INI" --version "$env:BUILD_VERSION"
 
       - name: Create installer virtual environment
         shell: pwsh
         run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           python -m venv .installer-venv
           .\.installer-venv\Scripts\python.exe -m pip install --upgrade pip
           .\.installer-venv\Scripts\python.exe -m pip install -r .\installer\requirements-build.txt
@@ -98,11 +109,15 @@ jobs:
       - name: Build installer executable
         shell: pwsh
         run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           .\.installer-venv\Scripts\python.exe .\scripts\build_installer.py --version "$env:BUILD_VERSION" --name "$env:INSTALLER_NAME"
 
       - name: Generate release manifest
         shell: pwsh
         run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           python .\scripts\generate_release_manifest.py --version "$env:BUILD_VERSION" --installer-path "dist-installer/$env:INSTALLER_NAME.exe"
 
       - name: Upload workflow artifacts
