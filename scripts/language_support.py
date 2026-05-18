@@ -31,7 +31,7 @@ class StagedLanguage:
 
 
 def _read_json(path: Path) -> dict:
-    with path.open("r", encoding="utf-8") as file_handle:
+    with path.open("r", encoding="utf-8-sig") as file_handle:
         return json.load(file_handle)
 
 
