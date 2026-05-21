@@ -214,6 +214,11 @@ Blueprint rewards can also be maintained from a structured source:
 effective shared `blueprints.ini` in memory before packaging, so GitHub workflows do not
 depend on a materialized `source/shared/overlays/blueprints.ini`.
 
+The blueprint review workflow can also infer new mission mappings from `Game2.dcb`,
+contract generators, and missiondata exports. Apply only strict or explicitly reviewed
+results to the structured source; leave ambiguous cases unresolved until there is direct
+evidence in live data.
+
 Utility scripts:
 
 - `python .\.codex\skills\sc-blueprint-extractor\scripts\maintenance\bootstrap_blueprint_pools.py`
@@ -268,6 +273,7 @@ Encoding note:
 
 - the packaged `global.ini` for Star Citizen is intentionally written as UTF-8 with BOM to match the game expectations and avoid mojibake;
 - installer metadata such as `manifest.json`, `_metadata/version.txt`, and `installer/ui_texts/*.json` are not game assets and must remain readable by the installer JSON/text loaders, which therefore need to tolerate BOM when present.
+- staged installer metadata under `dist/<version>/staging/<language>/_metadata/language.json` may also be UTF-8 with BOM and must be read with BOM-tolerant loaders.
 
 ### Included validations
 
@@ -733,6 +739,7 @@ Limite de codificacion del instalador:
 
 - conserva el requisito de BOM para los archivos de localizacion que consume el juego, como `data/Localization/<game_language>/global.ini`;
 - no asumas ese mismo requisito para los metadatos del instalador o para los artefactos de release solo porque se publiquen junto al instalador.
+- `dist/<version>/staging/<idioma>/_metadata/language.json` forma parte de esos metadatos y debe leerse con tolerancia a BOM.
 
 Tambien puedes abrir la app directamente en modo script:
 

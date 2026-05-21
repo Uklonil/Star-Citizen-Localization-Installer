@@ -2,6 +2,7 @@ input/current/global.ini
 source/languages/es-es/translation.ini
 source/languages/<code>/overlays/
 source/blueprints/
+source/shared/overlays/blueprints.ini
 scripts/
 .codex/skills/sc-blueprint-extractor/scripts/
 installer/
