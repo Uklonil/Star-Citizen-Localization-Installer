@@ -9,6 +9,9 @@ El mantenimiento de blueprints se hace desde una fuente estructurada:
 
 El overlay `source/shared/overlays/blueprints.ini` es un artefacto generado para compatibilidad e inspección, no la fuente editable principal.
 
+Para claves visibles detectadas in-game que no existan todavia en `input/current/global.ini`, el sitio correcto es `source/languages/<code>/overlays/modified_global.ini`.
+No deben añadirse a `translation.ini`, que debe seguir alineado con la extraccion base actual.
+
 El instalador y los artefactos de release comparten una frontera de codificación importante:
 
 - `global.ini` del juego debe mantenerse en UTF-8 con BOM;

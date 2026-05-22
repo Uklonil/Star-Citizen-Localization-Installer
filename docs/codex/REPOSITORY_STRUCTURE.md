@@ -1,6 +1,7 @@
 input/current/global.ini
 source/languages/es-es/translation.ini
 source/languages/<code>/overlays/
+source/languages/<code>/overlays/modified_global.ini
 source/blueprints/
 source/shared/overlays/blueprints.ini
 scripts/

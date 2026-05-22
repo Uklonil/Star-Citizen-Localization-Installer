@@ -176,6 +176,13 @@ Build application order:
 3. `components.ini` appends its suffix on top of the base.
 4. `blueprints.ini` appends its suffix on top of the base or the already-extended variant.
 
+Use `modified_global.ini` for:
+
+- keys that exist in `global.ini` but need a full-value override;
+- keys discovered in-game that are not yet present in the current extracted `input/current/global.ini`.
+
+Do not add those extra keys to `translation.ini`. The build keeps `translation.ini` aligned to the extracted base file, while `modified_global.ini` is the supported place for additive per-language overrides.
+
 For compatibility, if an old overlay still stores the full text instead of only the suffix, the pipeline automatically trims the base prefix before appending it.
 
 `components.ini` and `blueprints.ini` support `@KEY@` references that are resolved against the effective language base.
@@ -279,7 +286,8 @@ Encoding note:
 
 `scripts/build_distributions.py` validates before packaging:
 
-- no unknown keys in translation memory or overlays;
+- `translation.ini` must stay structurally valid against the extracted English base;
+- `modified_global.ini` may contain unknown keys when they are intentional additive overrides;
 - placeholders, escapes, and markup remain intact where required;
 - overlay `@KEY@` references can be resolved;
 - output order and keys still match the English `global.ini`.
@@ -575,6 +583,13 @@ El orden de aplicacion durante el build es:
 3. `components.ini` concatena su sufijo sobre la base.
 4. `blueprints.ini` concatena su sufijo sobre la base o sobre la variante ya extendida.
 
+Usa `modified_global.ini` para:
+
+- claves que existen en `global.ini` pero necesitan un reemplazo completo del valor;
+- claves detectadas in-game que todavia no existen en el `input/current/global.ini` extraido.
+
+No metas esas claves extra en `translation.ini`. El build mantiene `translation.ini` alineado con el fichero base extraido, mientras que `modified_global.ini` es el lugar soportado para overrides aditivos por idioma.
+
 Por compatibilidad, si un overlay antiguo todavia guarda el texto completo en vez del sufijo, el pipeline recorta automaticamente el prefijo base antes de anexarlo.
 
 Los overlays `components.ini` y `blueprints.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
@@ -670,7 +685,8 @@ Nota de codificacion:
 
 `scripts/build_distributions.py` valida antes de empaquetar:
 
-- que no existan claves desconocidas en la memoria ni en los overlays;
+- que `translation.ini` siga siendo estructuralmente valido frente a la base inglesa extraida;
+- que `modified_global.ini` pueda contener claves desconocidas cuando sean overrides aditivos intencionados;
 - que los placeholders, escapes y markup no se rompan donde corresponde;
 - que las referencias `@KEY@` de overlays se puedan resolver;
 - que el orden y las claves de salida sigan el `global.ini` ingles.
