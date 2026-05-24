@@ -1,0 +1,7 @@
+﻿Version: local-blueprint-fix
+
+# Language: `en` (English)
+Total of patch keys: 88997
+Keys present in master memory: 0
+Keys with found translation: 88997
+Keys pending translation: 0
