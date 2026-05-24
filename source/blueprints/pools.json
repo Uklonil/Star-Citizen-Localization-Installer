@@ -423,6 +423,38 @@
         "item_Namevolt_rifle_energy_01_mag"
       ]
     },
+    "BP_REWARDS_FullStrikeOnStationA": {
+      "item_refs": [
+        "item_Name_mrai_flightsuit_01_07_02",
+        "item_Name_mrai_flightsuit_01_07_12",
+        "item_Name_mrai_flightsuit_01_07_18",
+        "item_Name_mrai_flightsuit_helmet_01_07_02",
+        "item_Name_mrai_flightsuit_helmet_01_07_12",
+        "item_Name_mrai_flightsuit_helmet_01_07_18",
+        "item_Nameutfl_crossbow_ballistic_01",
+        "item_Nameutfl_crossbow_ballistic_01_tint01",
+        "item_Nameutfl_crossbow_ballistic_01_tint02",
+        "item_Nameutfl_crossbow_ballistic_01_tint03",
+        "item_Name_vgl_flightsuit_helmet_01_05_01",
+        "item_Name_vgl_flightsuit_helmet_01_08_01",
+        "item_Name_vgl_flightsuit_helmet_01_07_01",
+        "item_Name_vgl_flightsuit_helmet_01_10_01"
+      ]
+    },
+    "BP_REWARDS_FullStrikeOnStationB": {
+      "item_refs": [
+        "item_NameAMRS_LaserCannon_S1",
+        "item_NameAMRS_LaserCannon_S2",
+        "item_NameAMRS_LaserCannon_S3",
+        "item_NameAMRS_LaserCannon_S4",
+        "item_NameAMRS_LaserCannon_S5",
+        "item_NameAMRS_LaserCannon_S6",
+        "item_NamePOWR_AMRS_S01_JS300_SCItem",
+        "item_NamePOWR_AMRS_S02_JS400_SCItem",
+        "item_NamePOWR_AEGS_S03_QuadracellMX_SCItem",
+        "item_NamePOWR_AMRS_S03_JS500_SCItem"
+      ]
+    },
     "BP_MISSIONREWARD_HeadHunters_MercenaryFPS_EliminateALL_RegionAB": {
       "item_refs": [
         "item_Name_slaver_armor_light_arms_01_01_01",
@@ -1009,6 +1041,10 @@
     "InterSec_SecurityPatrol_H_Desc_001": "BP_MISSIONREWARD_InterSec_Patrol",
     "InterSec_SecurityPatrol_S_Desc_001": "BP_MISSIONREWARD_InterSec_Patrol",
     "InterSec_SecurityPatrol_VH_desc_001": "BP_MISSIONREWARD_InterSec_Patrol",
+    "Intersec_TSG_Group_Desc_001": [
+      "BP_REWARDS_FullStrikeOnStationA",
+      "BP_REWARDS_FullStrikeOnStationB"
+    ],
     "Intersec_DefendShip_Desc_Easy_001": "BP_MISSIONREWARD_InterSec_DefendShip",
     "Intersec_DefendShip_Desc_Hard_001": "BP_MISSIONREWARD_InterSec_DefendShip",
     "Intersec_DefendShip_Desc_Medium_001": "BP_MISSIONREWARD_InterSec_DefendShip",
