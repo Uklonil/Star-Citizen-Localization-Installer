@@ -196,6 +196,67 @@
         "item_Name_POWR_JUST_S02_Sedulity"
       ]
     },
+    "BP_REWARDS_FTL_DETAILED": {
+      "lines": [
+        "- @item_Name_QDRV_JUST_S01_Colossus@ (##component_quantum_drive##)",
+        "- @item_NameQDRV_JUST_S02_Huracan_SCItem@ (##component_quantum_drive##)",
+        "- @item_NameQDRV_JUST_S03_Agni_SCItem@ (##component_quantum_drive##)",
+        "- @item_Name_POWR_JUST_S00_Defiant@ (##component_power_plant##)",
+        "- @item_NamePOWR_JUST_S01_Endurance_SCItem@ (##component_power_plant##)",
+        "- @item_Name_POWR_JUST_S02_Sedulity@ (##component_power_plant##)"
+      ]
+    },
+    "BP_REWARDS_THECOLLECTOR_VGLFLIGHTSUIT": {
+      "lines": [
+        "<EM4>##blueprint_group_1##</EM4>",
+        "- @item_Name_vgl_flightsuit_01_02_01@",
+        "",
+        "<EM4>##blueprint_group_2##</EM4>",
+        "- @item_Name_vgl_flightsuit_helmet_01_02_01@"
+      ]
+    },
+    "BP_REWARDS_THECOLLECTOR_NONEAR": {
+      "item_refs": [
+        "item_Namenone_rifle_multi_01_collector01"
+      ]
+    },
+    "BP_REWARDS_THECOLLECTOR_L22WOLF": {
+      "item_refs": [
+        "item_Name_Carryable_2H_CY_CollectorMaterial_001"
+      ]
+    },
+    "BP_REWARDS_COVALEX_MASTER": {
+      "lines": [
+        "- @item_Name_QDRV_WETK_S01_VK00@ (##component_quantum_drive##)",
+        "- @item_NameQDRV_WETK_S01_Siren@ (##component_quantum_drive##)",
+        "- @item_nameQDRV_WETK_S02_XL1_SCItem@ (##component_quantum_drive##)",
+        "- @item_Name_QDRV_WETK_S02_Yeager@ (##component_quantum_drive##)",
+        "- @item_NameQDRV_WETK_S03_Balandin@ (##component_quantum_drive##)",
+        "- @item_NameQDRV_WETK_S03_TS2@ (##component_quantum_drive##)",
+        "- @item_Name_SHLD_BASL_S01_Palisade@ (##component_shield##)",
+        "- @item_Name_SHLD_BASL_S02_Rampart@ (##component_shield##)",
+        "- @item_Name_SHLD_BASL_S03_Parapet@ (##component_shield##)"
+      ]
+    },
+    "BP_REWARDS_UWC_REFUELING": {
+      "lines": [
+        "- bp_craft_nozzle_fuelgiver_grin_nozzlefast (##component_fuel_nozzle##)",
+        "- @Nozzle_FuelGiver_GRIN_NozzleSecure_Name@ (##component_fuel_nozzle##)",
+        "- @Nozzle_FuelGiver_GRIN_NozzleVeryFast_Name@ (##component_fuel_nozzle##)",
+        "- bp_craft_nozzle_fuelgiver_grin_nozzleverysecure (##component_fuel_nozzle##)",
+        "- bp_craft_nozzle_fuelgiver_misc_nozzlestandard (##component_fuel_nozzle##)",
+        "- @Nozzle_FuelGiver_SHIN_NozzleExpensiveFast_Name@ (##component_fuel_nozzle##)",
+        "- @Nozzle_FuelGiver_SHIN_NozzleExpensiveSecure_Name@ (##component_fuel_nozzle##)",
+        "- @Nozzle_FuelGiver_SHIN_NozzleMostExpensive_Name@ (##component_fuel_nozzle##)"
+      ]
+    },
+    "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE": {
+      "lines": [
+        "- @item_scraper_GRIN_Large_Name@ (##component_salvage_module##)",
+        "- @item_scraper_GRIN_Standard_Name@ (##component_salvage_module##)",
+        "- @item_scraper_GRIN_Small_Name@ (##component_salvage_module##)"
+      ]
+    },
     "BP_REWARDS_LingFamilyHauling": {
       "item_refs": [
         "item_NameCarryable_1H_CY_cargo_model_1_b",
@@ -726,6 +787,126 @@
         "item_Nameklwe_pistol_energy_01_mag"
       ]
     },
+    "BP_REWARDS_SHUBIN_SHIPMINING_S_GROUPED": {
+      "lines": [
+        "<EM4>##blueprint_group_1##</EM4>",
+        "- @item_Nameklwe_pistol_energy_01_white01@",
+        "- @item_Nameklwe_pistol_energy_01@",
+        "- @item_Name_rsi_explorer_armor_light_arms_01_01_01@",
+        "- @item_Name_rsi_explorer_armor_light_core_01_01_01@",
+        "- @item_Name_rsi_explorer_armor_light_legs_01_01_01@",
+        "- @item_Name_rsi_deckcrew_armor_light_helmet_01_01_01@",
+        "- @item_Nameklwe_pistol_energy_01_mag@",
+        "",
+        "<EM4>##blueprint_group_2##</EM4>",
+        "- @item_Mining_MiningLaser_Greycat_Default_SV@ (##component_mining_laser##)",
+        "- @item_NameMining_Head_S00_Hofstede_SCItem,P@ (##component_mining_laser##)",
+        "- @item_NameMining_Head_S00_Klein_SCItem@ (##component_mining_laser##)",
+        "- @item_NameMining_Head_S00_Helix_SCItem,P@ (##component_mining_laser##)",
+        "- @item_Name_RADR_CHCO_S00_SurveyorGo@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S01_SurveyorLite@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S02_Surveyor@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S03_SurveyorMax@ (##component_radar##)",
+        "",
+        "<EM4>##blueprint_group_3##</EM4>",
+        "- @item_Mining_MiningLaser_Drake_Default_S0@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Shubin_1_S1@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Shubin_2_S1@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Thermyte_2_S1@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Thermyte_1_S1@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Greycat_Default_S1@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Greycat_1_S1@ (##component_mining_laser##)",
+        "- @item_Name_RADR_CHCO_S00_BroadSpecGo@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S02_BroadSpec@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S04_BroadSpecMax@ (##component_radar##)",
+        "",
+        "<EM4>##blueprint_group_4##</EM4>",
+        "- @item_Mining_MiningLaser_Greycat_Default_S2@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Greycat_1_S2@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Shubin_1_S2@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Shubin_2_S2@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Thermyte_2_S2@ (##component_mining_laser##)",
+        "- @item_Mining_MiningLaser_Thermyte_1_S2@ (##component_mining_laser##)",
+        "- @item_Name_RADR_CHCO_S00_FullSpecGo@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S02_FullSpec@ (##component_radar##)",
+        "- @item_Name_RADR_CHCO_S03_FullSpecMax@ (##component_radar##)"
+      ]
+    },
+    "BP_REWARDS_SHUBIN_SHIPMINING_STANTON_S_VARIANTS": {
+      "variants": [
+        {
+          "header_token": "regional_variants_sample_locations",
+          "header_value": "Stanton, Pyro",
+          "item_refs": [
+            "item_Nameklwe_pistol_energy_01_white01",
+            "item_Nameklwe_pistol_energy_01",
+            "item_Name_rsi_explorer_armor_light_arms_01_01_01",
+            "item_Name_rsi_explorer_armor_light_core_01_01_01",
+            "item_Name_rsi_explorer_armor_light_legs_01_01_01",
+            "item_Name_rsi_deckcrew_armor_light_helmet_01_01_01",
+            "item_Nameklwe_pistol_energy_01_mag"
+          ]
+        },
+        {
+          "header_token": "regional_variants_sample_locations",
+          "header_value": "Crusader, microTech, Nyx",
+          "item_refs": [
+            "item_Nameklwe_pistol_energy_01_black02",
+            "item_Name_GRIN_utility_medium_arms_01_01_01",
+            "item_Name_GRIN_utility_medium_core_01_01_01",
+            "item_Name_GRIN_utility_medium_legs_01_01_01",
+            "item_Name_GRIN_utility_medium_helmet_01_01_01",
+            "item_Nameklwe_pistol_energy_01_green01",
+            "item_Nameklwe_pistol_energy_01_mag"
+          ]
+        },
+        {
+          "header_token": "regional_variants_sample_locations",
+          "header_value": "Stanton System, Crusader, microTech",
+          "lines": [
+            "- @item_Mining_MiningLaser_Greycat_Default_SV@ (##component_mining_laser##)",
+            "- @item_NameMining_Head_S00_Hofstede_SCItem,P@ (##component_mining_laser##)",
+            "- @item_NameMining_Head_S00_Klein_SCItem@ (##component_mining_laser##)",
+            "- @item_NameMining_Head_S00_Helix_SCItem,P@ (##component_mining_laser##)",
+            "- @item_Name_RADR_CHCO_S00_SurveyorGo@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S01_SurveyorLite@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S02_Surveyor@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S03_SurveyorMax@ (##component_radar##)"
+          ]
+        },
+        {
+          "header_token": "regional_variants_sample_locations",
+          "header_value": "Stanton System, Nyx, ArcCorp",
+          "lines": [
+            "- @item_Mining_MiningLaser_Drake_Default_S0@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Shubin_1_S1@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Shubin_2_S1@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Thermyte_2_S1@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Thermyte_1_S1@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Greycat_Default_S1@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Greycat_1_S1@ (##component_mining_laser##)",
+            "- @item_Name_RADR_CHCO_S00_BroadSpecGo@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S02_BroadSpec@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S04_BroadSpecMax@ (##component_radar##)"
+          ]
+        },
+        {
+          "header_token": "regional_variants_sample_locations",
+          "header_value": "Stanton System, Hurston, Nyx",
+          "lines": [
+            "- @item_Mining_MiningLaser_Greycat_Default_S2@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Greycat_1_S2@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Shubin_1_S2@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Shubin_2_S2@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Thermyte_2_S2@ (##component_mining_laser##)",
+            "- @item_Mining_MiningLaser_Thermyte_1_S2@ (##component_mining_laser##)",
+            "- @item_Name_RADR_CHCO_S00_FullSpecGo@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S02_FullSpec@ (##component_radar##)",
+            "- @item_Name_RADR_CHCO_S03_FullSpecMax@ (##component_radar##)"
+          ]
+        }
+      ]
+    },
     "BP_MISSIONREWARD_Shubin_Rockcracker_MiningRights": {
       "item_refs": [
         "item_Namegmni_shotgun_ballistic_01_pink_red01",
@@ -1081,19 +1262,20 @@
     "Shubin_Industrial_ShipMining_Nyx_E_Local_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Nyx_H_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Nyx_M_Solar_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
-    "Shubin_Industrial_ShipMining_Nyx_S_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
+    "Shubin_Industrial_ShipMining_Nyx_S_Secondary_Desc_001": "BP_REWARDS_SHUBIN_SHIPMINING_S_GROUPED",
     "Shubin_Industrial_ShipMining_Nyx_VH_Interstellar_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Nyx_VH_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Pyro_E_Local_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Pyro_H_PrimarySecondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Pyro_H_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Pyro_M_Solar_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
-    "Shubin_Industrial_ShipMining_Pyro_S_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
+    "Shubin_Industrial_ShipMining_Pyro_S_Secondary_Desc_001": "BP_REWARDS_SHUBIN_SHIPMINING_S_GROUPED",
     "Shubin_Industrial_ShipMining_Pyro_VH_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_PyroNyx",
     "Shubin_Industrial_ShipMining_Stanton_E_Local_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_Stanton",
     "Shubin_Industrial_ShipMining_Stanton_H_PrimarySecondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_Stanton",
     "Shubin_Industrial_ShipMining_Stanton_H_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_Stanton",
     "Shubin_Industrial_ShipMining_Stanton_M_Solar_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_Stanton",
+    "Shubin_Industrial_ShipMining_Stanton_S_Secondary_Desc_001": "BP_REWARDS_SHUBIN_SHIPMINING_STANTON_S_VARIANTS",
     "Shubin_Industrial_ShipMining_Stanton_VH_Interstellar_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_Stanton",
     "Shubin_Industrial_ShipMining_Stanton_VH_Secondary_Desc_001": "BP_MISSIONREWARD_Shubin_ResourceGathering_ShipMining_Stanton",
     "Vaughn_EliminateBoss_FPS_Rockcracker_Warehouse_desc_001": "BP_MISSIONREWARD_RDC_Boss",
@@ -1129,6 +1311,29 @@
     "Eckhart_EscortShips_VH_desc": "BP_REWARDS_EckhartSecurityEscortShipsEasy",
     "FTL_Courier_Stanton_Easy_Desc_001": "BP_REWARDS_FTL",
     "FTL_Courier_Stanton_Medium_Desc_001": "BP_REWARDS_FTL",
+    "FTL_Courier_Nyx_Easy_Desc_001": "BP_REWARDS_FTL_DETAILED",
+    "TheCollector_Recipes_Desc_VGLflightsuit": "BP_REWARDS_THECOLLECTOR_VGLFLIGHTSUIT",
+    "TheCollector_Recipes_Desc_NoneAR": "BP_REWARDS_THECOLLECTOR_NONEAR",
+    "TheCollector_Recipes_Desc_L22Wolf": "BP_REWARDS_THECOLLECTOR_L22WOLF",
+    "Covalex_HaulCargo_AtoB_desc_ToRuinStation": "BP_REWARDS_COVALEX_MASTER",
+    "Covalex_HaulCargo_AtoB_desc_ToLevski": "BP_REWARDS_COVALEX_MASTER",
+    "Covalex_HaulCargo_AtoB_desc_FromLevski": "BP_REWARDS_COVALEX_MASTER",
+    "Covalex_HaulCargo_AtoB_desc_FromRuinStation": "BP_REWARDS_COVALEX_MASTER",
+    "Covalex_HaulCargo_SingleToMulti_desc_ToCFP_Danger": "BP_REWARDS_COVALEX_MASTER",
+    "Covalex_HaulCargo_SingleToMulti_desc_Valakkar_Timed": "BP_REWARDS_COVALEX_MASTER",
+    "Covalex_HaulCargo_AtoB_desc_DeliverAll": "BP_REWARDS_COVALEX_MASTER",
+    "UWC_Refueling_easy_desc_001": "BP_REWARDS_UWC_REFUELING",
+    "UWC_Refueling_moderate_desc_001,P": "BP_REWARDS_UWC_REFUELING",
+    "UWC_Refueling_multiple_med_desc_001,P": "BP_REWARDS_UWC_REFUELING",
+    "UWC_Refueling_high_desc_001,P": "BP_REWARDS_UWC_REFUELING",
+    "Adagio_Industrial_Component_Salvage_Universal_M_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Stanton_M_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Pyro_M_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Levski_M_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Universal_H_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Stanton_H_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Pyro_H_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
+    "Adagio_Industrial_Component_Salvage_Levski_H_Desc_001,P": "BP_REWARDS_ADAGIO_COMPONENT_SALVAGE",
     "CleanAir_Hauling_Bulk_MedicalSupplies_desc_02": "BP_REWARDS_LingFamilyHauling",
     "CleanAir_Hauling_Bulk_MoldTreatment_desc": "BP_REWARDS_LingFamilyHauling",
     "CleanAir_Hauling_Small_MedicalSupplies_desc_02": "BP_REWARDS_LingFamilyHauling",
