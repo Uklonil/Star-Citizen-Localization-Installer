@@ -85,6 +85,21 @@ function Add-StepSkipped {
     $stepsSkipped.Add($Name) | Out-Null
 }
 
+function Invoke-Python {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $venvPython = "venv\Scripts\python.exe"
+
+    if (Test-Path $venvPython) {
+        & $venvPython @Arguments
+    } else {
+        & python @Arguments
+    }
+}
+
 function Get-JsonBool {
     param(
         [object]$Object,
@@ -301,7 +316,13 @@ Invoke-Step "Version sync" {
         throw "Missing version sync script: $versionScript"
     }
 
-    python $versionScript --p4k $P4K --state $statePath --version-file "VERSION" --report "informes/version-sync-report.md"
+    Invoke-Python -Arguments @(
+        $versionScript,
+        "--p4k", $P4K,
+        "--state", $statePath,
+        "--version-file", "VERSION",
+        "--report", "informes/version-sync-report.md"
+    )
 
     if ($LASTEXITCODE -ne 0) {
         throw "sync_version.py returned exit code $LASTEXITCODE"
@@ -364,7 +385,10 @@ if ($runGlobalSync) {
             Add-WarningMessage "No extract_global.ps1 found in sc-global-ini-sync; assuming input/current/global.ini is refreshed by the skill or manually."
         }
 
-        python $syncScript --block-label $Version
+        Invoke-Python -Arguments @(
+            $syncScript,
+            "--block-label", $Version
+        )
 
         if ($LASTEXITCODE -ne 0) {
             throw "sync_missing_keys.py returned exit code $LASTEXITCODE"
@@ -422,14 +446,10 @@ if ($runBuild) {
             throw "Missing build script: $buildScript"
         }
 
-        $venvPython = "venv\Scripts\python.exe"
-
-        if (Test-Path $venvPython) {
-            & $venvPython $buildScript --version $Version
-        } else {
-            Add-WarningMessage "venv Python not found; falling back to python from PATH."
-            python $buildScript --version $Version
-        }
+        Invoke-Python -Arguments @(
+            $buildScript,
+            "--version", $Version
+        )
 
         if ($LASTEXITCODE -ne 0) {
             $script:buildStatus = "failed"
