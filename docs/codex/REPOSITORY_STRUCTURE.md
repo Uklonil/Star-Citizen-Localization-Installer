@@ -2,7 +2,12 @@ input/current/global.ini
 source/languages/es-es/translation.ini
 source/languages/<code>/overlays/
 source/languages/<code>/overlays/modified_global.ini
+source/languages/<code>/overlays/components.ini
+source/languages/<code>/overlays/reputation.ini
+source/languages/<code>/overlays/blueprints.ini
+source/languages/<code>/overlays/transport.ini
 source/blueprints/
+source/blueprints/contracts_metadata.json
 source/shared/overlays/blueprints.ini
 scripts/
 .codex/skills/sc-blueprint-extractor/scripts/

@@ -14,6 +14,12 @@ class SourceLanguage:
     translation_memory: Path | None
     modified_overlay: Path
     components_overlay: Path
+    reputation_overlay: Path
+    reputation_overlay_specific: Path | None
+    reputation_overlay_shared: Path | None
+    transport_overlay: Path
+    transport_overlay_specific: Path | None
+    transport_overlay_shared: Path | None
     blueprints_overlay: Path
     blueprints_overlay_specific: Path | None
     blueprints_overlay_shared: Path | None
@@ -85,6 +91,30 @@ def discover_source_languages(repo_root: Path) -> list[SourceLanguage]:
                     translation_memory=_optional_path(language_dir, metadata.get("translation_memory")),
                     modified_overlay=(language_dir / metadata["modified_overlay"]).resolve(),
                     components_overlay=(language_dir / metadata["components_overlay"]).resolve(),
+                    reputation_overlay=_overlay_path_with_shared_fallback(
+                        repo_root=repo_root.resolve(),
+                        language_root=language_dir.resolve(),
+                        relative_path=metadata["reputation_overlay"],
+                        shared_root=shared_root.resolve(),
+                    ),
+                    reputation_overlay_specific=_existing_optional_path(
+                        language_dir / metadata["reputation_overlay"]
+                    ),
+                    reputation_overlay_shared=_existing_optional_path(
+                        shared_root / metadata["reputation_overlay"]
+                    ),
+                    transport_overlay=_overlay_path_with_shared_fallback(
+                        repo_root=repo_root.resolve(),
+                        language_root=language_dir.resolve(),
+                        relative_path=metadata["transport_overlay"],
+                        shared_root=shared_root.resolve(),
+                    ),
+                    transport_overlay_specific=_existing_optional_path(
+                        language_dir / metadata["transport_overlay"]
+                    ),
+                    transport_overlay_shared=_existing_optional_path(
+                        shared_root / metadata["transport_overlay"]
+                    ),
                     blueprints_overlay=_overlay_path_with_shared_fallback(
                         repo_root=repo_root.resolve(),
                         language_root=language_dir.resolve(),
@@ -116,6 +146,12 @@ def discover_source_languages(repo_root: Path) -> list[SourceLanguage]:
             translation_memory=(legacy_root / "translations" / "base-spanish.ini").resolve(),
             modified_overlay=(legacy_root / "overlays" / "modified_global.ini").resolve(),
             components_overlay=(legacy_root / "overlays" / "components.ini").resolve(),
+            reputation_overlay=(legacy_root / "overlays" / "reputation.ini").resolve(),
+            reputation_overlay_specific=(legacy_root / "overlays" / "reputation.ini").resolve(),
+            reputation_overlay_shared=None,
+            transport_overlay=(legacy_root / "overlays" / "transport.ini").resolve(),
+            transport_overlay_specific=(legacy_root / "overlays" / "transport.ini").resolve(),
+            transport_overlay_shared=None,
             blueprints_overlay=(legacy_root / "overlays" / "blueprints.ini").resolve(),
             blueprints_overlay_specific=(legacy_root / "overlays" / "blueprints.ini").resolve(),
             blueprints_overlay_shared=None,

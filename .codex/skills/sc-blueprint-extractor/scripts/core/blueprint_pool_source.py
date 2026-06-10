@@ -98,12 +98,20 @@ def _normalize_contract_metadata_key(key: str) -> str:
     return key.split(",", 1)[0]
 
 
-def _title_suffix_from_metadata(title_meta: dict[str, object], *, existing_value: str) -> str:
+def _title_suffix_from_metadata(
+    title_meta: dict[str, object],
+    *,
+    existing_value: str,
+    include_rep: bool,
+    include_blueprint_flag: bool,
+) -> str:
     rep_ranges = [str(item) for item in title_meta.get("rep_ranges", []) if str(item)]
     blueprint_flag = bool(title_meta.get("blueprint_flag"))
     blueprint_flag_uncertain = bool(title_meta.get("blueprint_flag_uncertain"))
-    parts = [f"[{rep} Rep]" for rep in rep_ranges]
-    if blueprint_flag or blueprint_flag_uncertain:
+    parts: list[str] = []
+    if include_rep:
+        parts.extend(f"[{rep} Rep]" for rep in rep_ranges)
+    if include_blueprint_flag and (blueprint_flag or blueprint_flag_uncertain):
         parts.append("[BP]*" if blueprint_flag_uncertain else "[BP]")
     if not parts:
         return existing_value
@@ -114,13 +122,19 @@ def _title_suffix_from_metadata(title_meta: dict[str, object], *, existing_value
     return rendered
 
 
-def _description_metadata_lines(desc_meta: dict[str, object], *, existing_value: str) -> list[str]:
+def _description_reputation_lines(desc_meta: dict[str, object], *, existing_value: str) -> list[str]:
     lines: list[str] = []
 
     reputation_awarded = [str(item) for item in desc_meta.get("reputation_awarded", []) if str(item)]
     if reputation_awarded and "##reputation_awarded##" not in existing_value and "##reputation_awarded_by_difficulty##" not in existing_value:
         token = "reputation_awarded_by_difficulty" if any("/" in value for value in reputation_awarded) else "reputation_awarded"
         lines.append(f"<EM4>##{token}##:</EM4> {' / '.join(reputation_awarded)}")
+
+    return lines
+
+
+def _description_blueprint_metadata_lines(desc_meta: dict[str, object], *, existing_value: str) -> list[str]:
+    lines: list[str] = []
 
     scenario_progress_points = [str(item) for item in desc_meta.get("scenario_progress_points", []) if str(item)]
     if scenario_progress_points and "##scenario_progress_points##" not in existing_value:
@@ -142,6 +156,10 @@ def _apply_contract_metadata(
     entry_key: str,
     value: str,
     contract_metadata: dict | None,
+    include_title_rep: bool = True,
+    include_title_blueprint_flag: bool = True,
+    include_description_reputation: bool = True,
+    include_description_blueprint_metadata: bool = True,
 ) -> str:
     if contract_metadata is None:
         return value
@@ -153,13 +171,22 @@ def _apply_contract_metadata(
     enriched_value = value
     title_payload = title_meta.get(entry_key) or title_meta.get(normalized_key)
     if isinstance(title_payload, dict):
-        enriched_value = _title_suffix_from_metadata(title_payload, existing_value=enriched_value)
+        enriched_value = _title_suffix_from_metadata(
+            title_payload,
+            existing_value=enriched_value,
+            include_rep=include_title_rep,
+            include_blueprint_flag=include_title_blueprint_flag,
+        )
 
     desc_payload = description_meta.get(entry_key) or description_meta.get(normalized_key)
     if not isinstance(desc_payload, dict):
         return enriched_value
 
-    metadata_lines = _description_metadata_lines(desc_payload, existing_value=enriched_value)
+    metadata_lines: list[str] = []
+    if include_description_reputation:
+        metadata_lines.extend(_description_reputation_lines(desc_payload, existing_value=enriched_value))
+    if include_description_blueprint_metadata:
+        metadata_lines.extend(_description_blueprint_metadata_lines(desc_payload, existing_value=enriched_value))
     if not metadata_lines:
         return enriched_value
 
@@ -169,6 +196,29 @@ def _apply_contract_metadata(
 
     prefix = "\\n\\n" if enriched_value else ""
     return enriched_value + prefix + "\\n".join(metadata_lines)
+
+
+def generate_reputation_overlay_data(*, contract_metadata_path: Path) -> GlobalIniData:
+    contract_metadata = load_contract_metadata_source(contract_metadata_path)
+    metadata_keys = set(contract_metadata.get("title_meta", {})) | set(contract_metadata.get("description_meta", {}))
+
+    generated_entries: list[Entry] = []
+    for entry_key in sorted(metadata_keys):
+        rendered_value = _apply_contract_metadata(
+            entry_key=entry_key,
+            value="",
+            contract_metadata=contract_metadata,
+            include_title_rep=True,
+            include_title_blueprint_flag=False,
+            include_description_reputation=True,
+            include_description_blueprint_metadata=False,
+        )
+        if not rendered_value:
+            continue
+        generated_entries.append(Entry(key=entry_key, value=rendered_value))
+
+    generated_mapping = {entry.key: entry.value for entry in generated_entries}
+    return GlobalIniData(entries=generated_entries, mapping=generated_mapping)
 
 
 def render_pool_item_block(item_refs: list[str]) -> str:
@@ -311,6 +361,10 @@ def generate_blueprints_overlay_data(*, template_path: Path, pool_source_path: P
             entry_key=entry.key,
             value=rendered_value,
             contract_metadata=contract_metadata,
+            include_title_rep=False,
+            include_title_blueprint_flag=True,
+            include_description_reputation=False,
+            include_description_blueprint_metadata=True,
         )
 
         generated_entries.append(
@@ -331,6 +385,10 @@ def generate_blueprints_overlay_data(*, template_path: Path, pool_source_path: P
                 entry_key=entry_key,
                 value="",
                 contract_metadata=contract_metadata,
+                include_title_rep=False,
+                include_title_blueprint_flag=True,
+                include_description_reputation=False,
+                include_description_blueprint_metadata=True,
             )
             if not rendered_value:
                 continue

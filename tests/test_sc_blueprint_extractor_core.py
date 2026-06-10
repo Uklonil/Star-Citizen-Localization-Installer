@@ -22,6 +22,7 @@ from blueprint_pool_source import (  # noqa: E402
     _apply_contract_metadata,
     default_contract_metadata_source_path,
     default_blueprint_source_paths,
+    generate_reputation_overlay_data,
     generate_blueprints_overlay_data,
     load_contract_metadata_source,
     resolve_pool_tokens,
@@ -322,6 +323,42 @@ class BlueprintExtractorCoreTests(unittest.TestCase):
 
         self.assertEqual(rendered, " <EM4>[150 Rep]</EM4>")
 
+    def test_apply_contract_metadata_can_exclude_reputation_from_blueprint_overlay(self) -> None:
+        contract_metadata = {
+            "title_meta": {
+                "mission_title": {
+                    "blueprint_flag_uncertain": True,
+                    "rep_ranges": ["100"],
+                }
+            },
+            "description_meta": {
+                "mission_desc": {
+                    "reputation_awarded": ["75"],
+                    "scenario_progress_points": ["20"],
+                    "tier_labels": ["Jr. Contractor"],
+                }
+            },
+        }
+
+        title_rendered = _apply_contract_metadata(
+            entry_key="mission_title",
+            value=" <EM4>[BP]</EM4>",
+            contract_metadata=contract_metadata,
+            include_title_rep=False,
+            include_description_reputation=False,
+        )
+        desc_rendered = _apply_contract_metadata(
+            entry_key="mission_desc",
+            value="\\n\\n<EM4>##potential_blueprints##</EM4>\\n@BP_POOL@",
+            contract_metadata=contract_metadata,
+            include_title_rep=False,
+            include_description_reputation=False,
+        )
+
+        self.assertEqual(title_rendered, " <EM4>[BP]*</EM4>")
+        self.assertNotIn("##reputation_awarded##", desc_rendered)
+        self.assertIn("##scenario_progress_points##", desc_rendered)
+
     def test_load_contract_metadata_source_reads_expected_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             metadata_path = Path(temp_dir) / "contracts_metadata.json"
@@ -351,7 +388,7 @@ class BlueprintExtractorCoreTests(unittest.TestCase):
         self.assertIn("title_meta", payload)
         self.assertIn("description_meta", payload)
 
-    def test_generate_blueprints_overlay_data_adds_metadata_only_entries(self) -> None:
+    def test_generate_blueprints_overlay_data_adds_blueprint_metadata_only_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             template_path = Path(temp_dir) / "blueprints_template.ini"
             pools_path = Path(temp_dir) / "pools.json"
@@ -401,9 +438,41 @@ class BlueprintExtractorCoreTests(unittest.TestCase):
                     pool_source_path=pools_path,
                 )
 
+        self.assertNotIn("mission_title_only", generated.mapping)
+        self.assertNotIn("##reputation_awarded##", generated.mapping["mission_desc_only"])
+        self.assertIn("<EM4>##scenario_progress_points##:</EM4> 40", generated.mapping["mission_desc_only"])
+
+    def test_generate_reputation_overlay_data_adds_reputation_only_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            metadata_path = Path(temp_dir) / "contracts_metadata.json"
+            metadata_path.write_text(
+                json.dumps(
+                    {
+                        "title_meta": {
+                            "mission_title_only": {
+                                "blueprint_flag": False,
+                                "blueprint_flag_uncertain": False,
+                                "rep_ranges": ["200"],
+                            }
+                        },
+                        "description_meta": {
+                            "mission_desc_only": {
+                                "classification": "new-metadata-only",
+                                "reputation_awarded": ["80"],
+                                "scenario_progress_points": ["40"],
+                                "tier_labels": [],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            generated = generate_reputation_overlay_data(contract_metadata_path=metadata_path)
+
         self.assertEqual(generated.mapping["mission_title_only"], " <EM4>[200 Rep]</EM4>")
         self.assertIn("<EM4>##reputation_awarded##:</EM4> 80", generated.mapping["mission_desc_only"])
-        self.assertIn("<EM4>##scenario_progress_points##:</EM4> 40", generated.mapping["mission_desc_only"])
+        self.assertNotIn("##scenario_progress_points##", generated.mapping["mission_desc_only"])
 
     def test_load_contract_metadata_source_rejects_missing_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

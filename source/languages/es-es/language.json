@@ -5,6 +5,8 @@
   "translation_memory": "translation.ini",
   "modified_overlay": "overlays/modified_global.ini",
   "components_overlay": "overlays/components.ini",
+  "reputation_overlay": "overlays/reputation.ini",
+  "transport_overlay": "overlays/transport.ini",
   "blueprints_overlay": "overlays/blueprints.ini",
   "user_cfg": "user.cfg",
   "use_english_source_as_base": false

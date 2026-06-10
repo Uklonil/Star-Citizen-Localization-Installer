@@ -30,6 +30,8 @@ Expected structure per language:
 - `overlays/modified_global.ini`
 - `overlays/components.ini`
 - `overlays/blueprints.ini`
+- `overlays/reputation.ini`
+- `overlays/transport.ini`
 - optional `user.cfg`
 
 `blueprints.ini` can be language-specific or shared. If a language-specific file
@@ -71,6 +73,14 @@ The current internal variants are:
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
+
+Internally, the mission-metadata stack is already split into independent layers:
+
+- `reputation`
+- `blueprints`
+- `transport`
+
+They are not exposed as separate public release ZIPs. The installer still presents them as the single `blueprints` choice until more mix-and-match combinations are intentionally surfaced in the UI.
 
 ### Project structure
 
@@ -177,7 +187,9 @@ Build application order:
 1. `translation.ini` provides the language base translation.
 2. `modified_global.ini` fully replaces a key value.
 3. `components.ini` appends its suffix on top of the base.
-4. `blueprints.ini` appends its suffix on top of the base or the already-extended variant.
+4. `reputation.ini` appends reputation metadata on top of the current variant.
+5. `blueprints.ini` appends blueprint-specific markers and contract metadata.
+6. `transport.ini` appends route metadata for transport-style contracts.
 
 Use `modified_global.ini` for:
 
@@ -188,9 +200,9 @@ Do not add those extra keys to `translation.ini`. The build keeps `translation.i
 
 For compatibility, if an old overlay still stores the full text instead of only the suffix, the pipeline automatically trims the base prefix before appending it.
 
-`components.ini` and `blueprints.ini` support `@KEY@` references that are resolved against the effective language base.
+`components.ini`, `blueprints.ini`, `reputation.ini`, and `transport.ini` support `@KEY@` references that are resolved against the effective language base.
 
-`blueprints.ini` also supports language-local auxiliary tokens written as `##token##`.
+Mission metadata overlays also support language-local auxiliary tokens written as `##token##`.
 These tokens are resolved from:
 
 - `source/languages/<language>/auxiliary_keys.ini`
@@ -202,13 +214,13 @@ potential_blueprints=Potential Blueprints
 regional_variants=Regional variants
 ```
 
-Then inside `blueprints.ini`:
+Then inside an overlay such as `blueprints.ini`:
 
 ```ini
 SomeMission_desc_001=\n\n\n\n<EM4>##potential_blueprints##</EM4>\n- @item_Nameexample@
 ```
 
-This enables a lower-maintenance workflow for blueprints:
+This enables a lower-maintenance workflow for blueprints and other generated mission metadata:
 
 - keep a common `source/shared/overlays/blueprints.ini` for content shared by every language;
 - add `source/languages/<language>/overlays/blueprints.ini` only when that language needs an override;
@@ -218,10 +230,13 @@ Blueprint rewards can also be maintained from a structured source:
 
 - `source/blueprints/blueprints_template.ini`
 - `source/blueprints/pools.json`
+- `source/blueprints/contracts_metadata.json`
 
 `pools.json` stores reusable visible reward pools and a `mission_pool_map` that links each
-`*_desc*` key to one pool. When both files exist, `build_distributions.py` generates the
-effective shared `blueprints.ini` in memory before packaging, so GitHub workflows do not
+`*_desc*` key to one pool. `contracts_metadata.json` stores promoted contract metadata such as
+reputation tags, blueprint flags, scenario progress points, and tier labels extracted from
+`contracts.ini` review work. When these files exist, `build_distributions.py` generates the
+effective mission-metadata overlays in memory before packaging, so GitHub workflows do not
 depend on a materialized `source/shared/overlays/blueprints.ini`.
 
 The blueprint review workflow can also infer new mission mappings from `Game2.dcb`,
@@ -339,6 +354,7 @@ The app:
 - detects available languages in `staging`;
 - allows selecting the language before the overlay combination;
 - currently exposes checkboxes for `componentes` and `blueprints`, then resolves them to the internal variant bundle;
+- the `blueprints` checkbox currently implies the full mission-metadata stack: reputation, blueprint markers, and transport-route metadata;
 - copies `user.cfg` and `data/Localization/<game_language>/global.ini`;
 - warns when the target path requires administrator privileges.
 
@@ -449,6 +465,8 @@ La estructura esperada por idioma es:
 - `overlays/modified_global.ini`
 - `overlays/components.ini`
 - `overlays/blueprints.ini`
+- `overlays/reputation.ini`
+- `overlays/transport.ini`
 - `user.cfg` opcional
 
 `blueprints.ini` puede ser especifico del idioma o compartido. Si falta el
@@ -490,6 +508,14 @@ Las variantes internas actuales son:
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
+
+Internamente, la pila de metadatos de misiones ya esta separada en capas:
+
+- `reputation`
+- `blueprints`
+- `transport`
+
+No se publican como ZIPs independientes. El instalador las sigue presentando como una sola opcion `blueprints` hasta que se expongan combinaciones mas finas de forma deliberada.
 
 ### Estructura del proyecto
 
@@ -596,7 +622,9 @@ El orden de aplicacion durante el build es:
 1. `translation.ini` aporta la traduccion base del idioma.
 2. `modified_global.ini` reemplaza por completo el valor de una clave.
 3. `components.ini` concatena su sufijo sobre la base.
-4. `blueprints.ini` concatena su sufijo sobre la base o sobre la variante ya extendida.
+4. `reputation.ini` anade metadatos de reputacion sobre la variante actual.
+5. `blueprints.ini` anade marcas y metadatos especificos de blueprints.
+6. `transport.ini` anade metadatos de ruta para contratos de transporte.
 
 Usa `modified_global.ini` para:
 
@@ -607,9 +635,9 @@ No metas esas claves extra en `translation.ini`. El build mantiene `translation.
 
 Por compatibilidad, si un overlay antiguo todavia guarda el texto completo en vez del sufijo, el pipeline recorta automaticamente el prefijo base antes de anexarlo.
 
-Los overlays `components.ini` y `blueprints.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
+Los overlays `components.ini`, `blueprints.ini`, `reputation.ini` y `transport.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
 
-`blueprints.ini` tambien admite tokens auxiliares por idioma escritos como `##token##`.
+Los overlays de metadatos de misiones tambien admiten tokens auxiliares por idioma escritos como `##token##`.
 Estos tokens se resuelven desde:
 
 - `source/languages/<idioma>/auxiliary_keys.ini`
@@ -621,13 +649,13 @@ potential_blueprints=Planos potenciales
 regional_variants=Variantes regionales
 ```
 
-Y dentro de `blueprints.ini`:
+Y dentro de un overlay como `blueprints.ini`:
 
 ```ini
 SomeMission_desc_001=\n\n\n\n<EM4>##potential_blueprints##</EM4>\n- @item_Nameexample@
 ```
 
-Esto permite un flujo de mantenimiento mas simple para blueprints:
+Esto permite un flujo de mantenimiento mas simple para blueprints y otros metadatos generados de misiones:
 
 - mantener un `source/shared/overlays/blueprints.ini` comun para contenido compartido por todos los idiomas;
 - anadir `source/languages/<idioma>/overlays/blueprints.ini` solo cuando ese idioma necesite un override;
@@ -637,10 +665,13 @@ Las recompensas de blueprints tambien pueden mantenerse desde una fuente estruct
 
 - `source/blueprints/blueprints_template.ini`
 - `source/blueprints/pools.json`
+- `source/blueprints/contracts_metadata.json`
 
 `pools.json` guarda pools reutilizables de recompensas visibles y un `mission_pool_map` que
-enlaza cada clave `*_desc*` con una pool. Si ambos ficheros existen, `build_distributions.py`
-genera en memoria el `blueprints.ini` compartido efectivo antes de empaquetar.
+enlaza cada clave `*_desc*` con una pool. `contracts_metadata.json` guarda metadatos de contratos
+promocionados desde el analisis de `contracts.ini`, como tags de reputacion, flags de blueprint,
+scenario progress points y tier labels. Si estos ficheros existen, `build_distributions.py`
+genera en memoria los overlays efectivos de metadatos de misiones antes de empaquetar.
 
 Scripts utiles:
 
@@ -750,6 +781,7 @@ La app:
 - detecta los idiomas disponibles en el `staging`;
 - permite elegir idioma antes de la combinacion de overlays;
 - expone checkboxes para `componentes` y `blueprints`, y resuelve esa eleccion a la variante interna correspondiente;
+- la opcion `blueprints` implica hoy toda la pila de metadatos de misiones: reputacion, marcas de blueprint y rutas de transporte;
 - copia `user.cfg` y `data/Localization/<game_language>/global.ini`;
 - avisa cuando la ruta requiere permisos de administrador.
 
