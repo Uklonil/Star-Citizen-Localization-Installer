@@ -120,13 +120,21 @@ jobs:
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           python .\scripts\generate_release_manifest.py --version "$env:BUILD_VERSION" --installer-path "dist-installer/$env:INSTALLER_NAME.exe"
 
+      - name: Generate release notes
+        shell: pwsh
+        run: |
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          python .\scripts\generate_release_notes.py --version "$env:BUILD_VERSION"
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: star-citizen-localization-${{ env.BUILD_VERSION }}
           if-no-files-found: error
           path: |
-            dist/${{ env.BUILD_VERSION }}/packages/*.zip
+            dist/${{ env.BUILD_VERSION }}/release-packages/*.zip
+            dist/${{ env.BUILD_VERSION }}/installer-bundle/*.zip
             dist/${{ env.BUILD_VERSION }}/reports/*
             dist-installer/${{ env.INSTALLER_NAME }}.exe
 
@@ -135,11 +143,13 @@ jobs:
         with:
           tag_name: ${{ env.BUILD_VERSION }}
           name: ${{ env.BUILD_VERSION }}
-          body_path: dist/${{ env.BUILD_VERSION }}/reports/summary.txt
+          body_path: dist/${{ env.BUILD_VERSION }}/reports/release-notes.md
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |
-            dist/${{ env.BUILD_VERSION }}/packages/*.zip
+            dist/${{ env.BUILD_VERSION }}/release-packages/*.zip
+            dist/${{ env.BUILD_VERSION }}/installer-bundle/*.zip
             dist/${{ env.BUILD_VERSION }}/reports/manifest.json
+            dist/${{ env.BUILD_VERSION }}/reports/release-notes.md
             dist/${{ env.BUILD_VERSION }}/reports/summary.txt
             dist-installer/${{ env.INSTALLER_NAME }}.exe

@@ -29,6 +29,10 @@ VARIANT_IDS = (
     "blueprints",
     "componentes-blueprints",
 )
+OVERLAY_IDS = (
+    "componentes",
+    "blueprints",
+)
 DEFAULT_RELEASE_REPOSITORY = "Uklonil/Star-Citizen-Localization-Spanish"
 RELEASE_API_BASE_URL = f"https://api.github.com/repos/{DEFAULT_RELEASE_REPOSITORY}/releases"
 MANIFEST_ASSET_NAME = "manifest.json"
@@ -100,6 +104,59 @@ def _variant_global_ini_path(variant_dir: Path, game_language: str) -> Path:
 
 def _is_valid_variant_dir(path: Path, game_language: str) -> bool:
     return (path / "user.cfg").is_file() and _variant_global_ini_path(path, game_language).is_file()
+
+
+def variant_name_from_overlay_selection(*, components_enabled: bool, blueprints_enabled: bool) -> str:
+    if components_enabled and blueprints_enabled:
+        return "componentes-blueprints"
+    if components_enabled:
+        return "componentes"
+    if blueprints_enabled:
+        return "blueprints"
+    return "base"
+
+
+def overlay_selection_from_variant_name(variant_name: str) -> tuple[bool, bool]:
+    normalized = variant_name.strip().lower()
+    if normalized == "componentes-blueprints":
+        return True, True
+    if normalized == "componentes":
+        return True, False
+    if normalized == "blueprints":
+        return False, True
+    return False, False
+
+
+def variant_supports_overlay(variant_name: str, overlay_name: str) -> bool:
+    components_enabled, blueprints_enabled = overlay_selection_from_variant_name(variant_name)
+    normalized_overlay = overlay_name.strip().lower()
+    if normalized_overlay == "componentes":
+        return components_enabled
+    if normalized_overlay == "blueprints":
+        return blueprints_enabled
+    raise ValueError(f"Overlay desconocido: {overlay_name}")
+
+
+def resolve_variant_name(
+    *,
+    available_variants,
+    components_enabled: bool,
+    blueprints_enabled: bool,
+) -> str | None:
+    variant_name = variant_name_from_overlay_selection(
+        components_enabled=components_enabled,
+        blueprints_enabled=blueprints_enabled,
+    )
+    return variant_name if variant_name in set(available_variants) else None
+
+
+def default_overlay_selection(*, available_variants) -> tuple[bool, bool]:
+    available = [variant_name for variant_name in VARIANT_IDS if variant_name in set(available_variants)]
+    if not available:
+        return False, False
+
+    default_variant = DEFAULT_VARIANT if DEFAULT_VARIANT in available else available[0]
+    return overlay_selection_from_variant_name(default_variant)
 
 
 def _cache_root() -> Path:
@@ -215,7 +272,7 @@ def _variant_from_manifest(*, version: str, variant_name: str, payload: dict) ->
     )
 
 
-def _bundle_from_manifest(*, manifest: dict, release_url: str | None) -> AssetBundle:
+def _bundle_from_manifest(*, manifest: dict, release_url: str | None, extracted_root: Path | None = None) -> AssetBundle:
     version = manifest.get("version")
     if not isinstance(version, str) or not version:
         raise ValueError("El manifest remoto no contiene un campo 'version' valido.")
@@ -232,27 +289,45 @@ def _bundle_from_manifest(*, manifest: dict, release_url: str | None) -> AssetBu
         label = language_payload.get("label")
         game_language = language_payload.get("game_language")
         variants_payload = language_payload.get("variants")
-        if not isinstance(label, str) or not isinstance(game_language, str) or not isinstance(variants_payload, dict):
+        if not isinstance(label, str) or not isinstance(game_language, str):
             continue
 
         variants: dict[str, VariantBundle] = {}
-        for variant_name in VARIANT_IDS:
-            variant_payload = variants_payload.get(variant_name)
-            if isinstance(variant_payload, dict):
-                variants[variant_name] = _variant_from_manifest(
-                    version=version,
-                    variant_name=variant_name,
-                    payload=variant_payload,
-                )
+        if isinstance(variants_payload, dict):
+            for variant_name in VARIANT_IDS:
+                variant_payload = variants_payload.get(variant_name)
+                if isinstance(variant_payload, dict):
+                    variants[variant_name] = _variant_from_manifest(
+                        version=version,
+                        variant_name=variant_name,
+                        payload=variant_payload,
+                    )
+        elif isinstance(variants_payload, list) and extracted_root is not None:
+            language_root = extracted_root / language_code
+            for variant_name in VARIANT_IDS:
+                if variant_name in variants_payload:
+                    variants[variant_name] = VariantBundle(
+                        name=variant_name,
+                        bundle_version=version,
+                        source_dir=language_root / variant_name,
+                    )
+        else:
+            continue
 
         if not variants:
             continue
+
+        language_root = None
+        if extracted_root is not None:
+            candidate_root = extracted_root / language_code
+            if candidate_root.is_dir():
+                language_root = candidate_root
 
         languages[language_code] = LanguageBundle(
             code=language_code,
             label=label,
             game_language=game_language,
-            root=None,
+            root=language_root,
             variants=variants,
         )
 
@@ -261,11 +336,44 @@ def _bundle_from_manifest(*, manifest: dict, release_url: str | None) -> AssetBu
 
     return AssetBundle(
         version=version,
-        root=_cache_version_root(version) / "staging",
+        root=extracted_root or (_cache_version_root(version) / "staging"),
         languages=languages,
         source="remote",
         release_url=release_url,
     )
+
+
+def _extract_installer_bundle(*, version: str, bundle_payload: dict) -> Path:
+    archive_name = bundle_payload.get("filename")
+    download_url = bundle_payload.get("url")
+    sha256 = bundle_payload.get("sha256")
+    if not isinstance(archive_name, str) or not archive_name:
+        raise ValueError("El manifest remoto no contiene un nombre valido para installer_bundle.")
+    if not isinstance(download_url, str) or not download_url:
+        raise ValueError("El manifest remoto no contiene una URL valida para installer_bundle.")
+
+    archive_path = _cached_archive_path(version=version, archive_name=archive_name)
+    extract_root = _cache_version_root(version) / "staging"
+    needs_download = not archive_path.is_file()
+    if not needs_download and isinstance(sha256, str) and sha256:
+        needs_download = _compute_sha256(archive_path).lower() != sha256.lower()
+
+    if needs_download:
+        _download_to_path(url=download_url, destination=archive_path)
+        if isinstance(sha256, str) and sha256:
+            downloaded_hash = _compute_sha256(archive_path)
+            if downloaded_hash.lower() != sha256.lower():
+                archive_path.unlink(missing_ok=True)
+                raise ValueError("El installer_bundle descargado no coincide con el hash esperado.")
+
+    if extract_root.exists():
+        shutil.rmtree(extract_root)
+    extract_root.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        archive.extractall(extract_root)
+
+    return extract_root
 
 
 def _fetch_remote_release_payload(version: str | None = None) -> dict:
@@ -278,7 +386,11 @@ def fetch_remote_asset_bundle(version: str | None = None) -> AssetBundle:
     manifest_version = manifest.get("version")
     if isinstance(manifest_version, str) and manifest_version:
         _write_cached_manifest(version=manifest_version, manifest=manifest)
-    return _bundle_from_manifest(manifest=manifest, release_url=release_url)
+    installer_bundle_payload = manifest.get("installer_bundle")
+    extracted_root = None
+    if isinstance(manifest_version, str) and manifest_version and isinstance(installer_bundle_payload, dict):
+        extracted_root = _extract_installer_bundle(version=manifest_version, bundle_payload=installer_bundle_payload)
+    return _bundle_from_manifest(manifest=manifest, release_url=release_url, extracted_root=extracted_root)
 
 
 def _local_asset_bundle_candidates() -> list[tuple[float, Path]]:
@@ -337,7 +449,12 @@ def load_asset_bundle(*, source: str | None = None, version: str | None = None) 
         cached_manifest = _read_cached_manifest(_cache_version_root(version or "latest") / MANIFEST_ASSET_NAME) if version else None
         if cached_manifest is not None:
             try:
-                return _bundle_from_manifest(manifest=cached_manifest, release_url=None)
+                cached_version = cached_manifest.get("version")
+                installer_bundle_payload = cached_manifest.get("installer_bundle")
+                extracted_root = None
+                if isinstance(cached_version, str) and cached_version and isinstance(installer_bundle_payload, dict):
+                    extracted_root = _extract_installer_bundle(version=cached_version, bundle_payload=installer_bundle_payload)
+                return _bundle_from_manifest(manifest=cached_manifest, release_url=None, extracted_root=extracted_root)
             except Exception:
                 pass
         return fetch_remote_asset_bundle(version)

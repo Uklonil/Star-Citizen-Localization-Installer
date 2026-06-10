@@ -19,16 +19,21 @@ try:
         AssetBundle,
         DEFAULT_VARIANT,
         LanguageBundle,
+        OVERLAY_IDS,
         VARIANT_IDS,
         detect_install_paths,
         discover_asset_bundle,
+        default_overlay_selection,
         fetch_remote_asset_bundle,
         install_variant,
         is_running_as_admin,
         load_asset_bundle,
         normalize_install_path,
+        resolve_variant_name,
+        overlay_selection_from_variant_name,
         path_requires_admin,
         run_elevated_process,
+        variant_supports_overlay,
     )
 except ImportError:
     current_dir = Path(__file__).resolve().parent
@@ -42,32 +47,42 @@ except ImportError:
             AssetBundle,
             DEFAULT_VARIANT,
             LanguageBundle,
+            OVERLAY_IDS,
             VARIANT_IDS,
             detect_install_paths,
             discover_asset_bundle,
+            default_overlay_selection,
             fetch_remote_asset_bundle,
             install_variant,
             is_running_as_admin,
             load_asset_bundle,
             normalize_install_path,
+            overlay_selection_from_variant_name,
             path_requires_admin,
+            resolve_variant_name,
             run_elevated_process,
+            variant_supports_overlay,
         )
     except ImportError:
         from installer_core import (
             AssetBundle,
             DEFAULT_VARIANT,
             LanguageBundle,
+            OVERLAY_IDS,
             VARIANT_IDS,
             detect_install_paths,
             discover_asset_bundle,
+            default_overlay_selection,
             fetch_remote_asset_bundle,
             install_variant,
             is_running_as_admin,
             load_asset_bundle,
             normalize_install_path,
+            overlay_selection_from_variant_name,
             path_requires_admin,
+            resolve_variant_name,
             run_elevated_process,
+            variant_supports_overlay,
         )
 
 DEFAULT_UI_LANGUAGE = "en"
@@ -197,6 +212,11 @@ def main(page: ft.Page) -> None:
     selected_language: LanguageBundle = default_language
     available_variants = [name for name in VARIANT_IDS if name in selected_language.variants]
     default_variant = DEFAULT_VARIANT if DEFAULT_VARIANT in selected_language.variants else available_variants[0]
+    default_components_enabled, default_blueprints_enabled = overlay_selection_from_variant_name(default_variant)
+    selected_overlays = {
+        "componentes": default_components_enabled,
+        "blueprints": default_blueprints_enabled,
+    }
 
     def strings() -> dict[str, str]:
         return load_ui_strings(selected_language.code)
@@ -266,7 +286,7 @@ def main(page: ft.Page) -> None:
         label_style=ft.TextStyle(font_family=FONT_FAMILY, color="#FFB347", size=12),
         text_style=ft.TextStyle(font_family=FONT_FAMILY, color="#F5F7FA", size=13),
     )
-    variant_group = ft.RadioGroup(content=ft.Column(spacing=10), value=default_variant)
+    overlay_group = ft.Column(spacing=10)
     install_button = ft.FilledButton(
         text="",
         icon=ft.Icons.DOWNLOAD_DONE,
@@ -335,6 +355,32 @@ def main(page: ft.Page) -> None:
     def variant_description(variant_name: str) -> str:
         return strings()[f"variant_{variant_name.replace('-', '_')}_desc"]
 
+    def overlay_label(overlay_name: str) -> str:
+        return strings()[f"overlay_{overlay_name}_label"]
+
+    def overlay_description(overlay_name: str) -> str:
+        return strings()[f"overlay_{overlay_name}_desc"]
+
+    def selected_variant_name() -> str | None:
+        return resolve_variant_name(
+            available_variants=selected_language.variants,
+            components_enabled=selected_overlays["componentes"],
+            blueprints_enabled=selected_overlays["blueprints"],
+        )
+
+    def ensure_overlay_selection(language: LanguageBundle) -> None:
+        variant_name = resolve_variant_name(
+            available_variants=language.variants,
+            components_enabled=selected_overlays["componentes"],
+            blueprints_enabled=selected_overlays["blueprints"],
+        )
+        if variant_name is not None:
+            return
+
+        default_components, default_blueprints = default_overlay_selection(available_variants=language.variants)
+        selected_overlays["componentes"] = default_components
+        selected_overlays["blueprints"] = default_blueprints
+
     def update_status(message: str, *, error: bool = False) -> None:
         status_text.value = message
         status_text.color = "#FFB4AB" if error else "#C7CDD3"
@@ -371,25 +417,54 @@ def main(page: ft.Page) -> None:
         kofi_button.text = strings()["footer_kofi_button"]
         update_bundle_ui()
 
-    def refresh_variant_cards(language: LanguageBundle) -> None:
+    def refresh_overlay_cards(language: LanguageBundle) -> None:
+        ensure_overlay_selection(language)
+        overlay_cards = []
         available = [name for name in VARIANT_IDS if name in language.variants]
-        variant_cards = []
-        for variant_name in available:
-            def select_variant(_: ft.ControlEvent, selected_variant: str = variant_name) -> None:
-                variant_group.value = selected_variant
+
+        for overlay_name in OVERLAY_IDS:
+            is_available = any(variant_supports_overlay(variant_name, overlay_name) for variant_name in available)
+
+            def apply_overlay_selection(*, selected_overlay: str, new_value: bool) -> None:
+                if not any(
+                    variant_supports_overlay(variant_name, selected_overlay)
+                    for variant_name in available
+                ):
+                    return
+                selected_overlays[selected_overlay] = new_value
+                ensure_overlay_selection(language)
+                refresh_overlay_cards(language)
                 page.update()
 
-            variant_cards.append(
+            def toggle_overlay_card(_: ft.ControlEvent, selected_overlay: str = overlay_name) -> None:
+                apply_overlay_selection(
+                    selected_overlay=selected_overlay,
+                    new_value=not selected_overlays[selected_overlay],
+                )
+
+            def change_overlay_checkbox(event: ft.ControlEvent, selected_overlay: str = overlay_name) -> None:
+                apply_overlay_selection(
+                    selected_overlay=selected_overlay,
+                    new_value=bool(event.control.value),
+                )
+
+            overlay_cards.append(
                 ft.Container(
                     ink=True,
-                    on_click=select_variant,
+                    on_click=toggle_overlay_card if is_available else None,
                     content=ft.Row(
                         controls=[
-                            ft.Radio(value=variant_name),
+                            ft.Checkbox(
+                                value=selected_overlays[overlay_name],
+                                disabled=not is_available,
+                                on_change=change_overlay_checkbox if is_available else None,
+                                check_color="#091018",
+                                active_color="#FF9A1F",
+                            ),
                             ft.Column(
                                 controls=[
-                                    ft.Text(variant_label(variant_name), weight=ft.FontWeight.W_600, size=15, font_family=FONT_FAMILY),
-                                    ft.Text(variant_description(variant_name), size=12, color="#B8C0C7", font_family=FONT_FAMILY),
+                                    ft.Text(overlay_label(overlay_name), weight=ft.FontWeight.W_600, size=15, font_family=FONT_FAMILY),
+                                    ft.Text(overlay_description(overlay_name), size=12, color="#B8C0C7", font_family=FONT_FAMILY),
                                 ],
                                 spacing=4,
                                 expand=True,
@@ -400,12 +475,11 @@ def main(page: ft.Page) -> None:
                     border=ft.border.all(1, "#2C3138"),
                     border_radius=12,
                     padding=14,
-                    bgcolor="#171B20",
+                    bgcolor="#171B20" if is_available else "#11141A",
                 )
             )
 
-        variant_group.content.controls = variant_cards
-        variant_group.value = DEFAULT_VARIANT if DEFAULT_VARIANT in language.variants else available[0]
+        overlay_group.controls = overlay_cards
 
     def set_install_path(path: str | Path) -> None:
         normalized = normalize_install_path(path)
@@ -434,7 +508,7 @@ def main(page: ft.Page) -> None:
         language_dropdown.options = [ft.dropdown.Option(language.code, language.label) for language in languages]
         language_dropdown.value = selected_language.code
         apply_ui_language()
-        refresh_variant_cards(selected_language)
+        refresh_overlay_cards(selected_language)
         if path_field.value:
             set_install_path(path_field.value)
         page.update()
@@ -443,7 +517,7 @@ def main(page: ft.Page) -> None:
         nonlocal selected_language
         selected_language = bundle.languages[language_dropdown.value]
         apply_ui_language()
-        refresh_variant_cards(selected_language)
+        refresh_overlay_cards(selected_language)
         update_status(
             format_text(
                 "status_bundle_detected",
@@ -586,7 +660,10 @@ def main(page: ft.Page) -> None:
             show_snackbar(strings()["snackbar_path_required"], error=True)
             return
 
-        variant_name = variant_group.value
+        variant_name = selected_variant_name()
+        if variant_name is None:
+            show_snackbar(strings()["snackbar_variant_missing"], error=True)
+            return
         variant = selected_language.variants.get(variant_name)
         if variant is None:
             show_snackbar(strings()["snackbar_variant_missing"], error=True)
@@ -747,7 +824,7 @@ def main(page: ft.Page) -> None:
     kofi_button.on_click = lambda _: page.launch_url(KO_FI_URL)
 
     apply_ui_language()
-    refresh_variant_cards(selected_language)
+    refresh_overlay_cards(selected_language)
     language_dropdown.on_change = handle_language_change
 
     page.add(
@@ -840,7 +917,7 @@ def main(page: ft.Page) -> None:
                                         ),
                                         panel(
                                             content_section_text,
-                                            variant_group,
+                                            overlay_group,
                                         ),
                                         panel(
                                             status_section_text,

@@ -7,7 +7,7 @@ Repository to maintain, validate, and distribute Star Citizen localizations.
 This project covers three tasks:
 
 - maintain master translation memories per language in `source/languages/<language>/`;
-- generate ready-to-copy packages for `LIVE`, with variants and overlays;
+- generate final ready-to-copy packages for `LIVE`, one public ZIP per language;
 - build a Windows installer to apply the localization over an existing installation.
 
 ### Credits and source material
@@ -30,6 +30,8 @@ Expected structure per language:
 - `overlays/modified_global.ini`
 - `overlays/components.ini`
 - `overlays/blueprints.ini`
+- `overlays/reputation.ini`
+- `overlays/transport.ini`
 - optional `user.cfg`
 
 `blueprints.ini` can be language-specific or shared. If a language-specific file
@@ -60,14 +62,25 @@ English is prepared as a base language using the original `global.ini` plus its 
 
 ### What this repository generates
 
-The pipeline generates four variants:
+The pipeline generates two output layers:
+
+- public release packages: one ZIP per language with all supported overlays already applied;
+- installer assets: the internal variant matrix kept in `staging` so the installer can offer overlay combinations.
+
+The current internal variants are:
 
 - `base`
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
 
-Each variant is packaged as a ZIP and also prepared in a `staging` directory for the installer.
+Internally, the mission-metadata stack is already split into independent layers:
+
+- `reputation`
+- `blueprints`
+- `transport`
+
+They are not exposed as separate public release ZIPs. The installer still presents them as the single `blueprints` choice until more mix-and-match combinations are intentionally surfaced in the UI.
 
 ### Project structure
 
@@ -84,7 +97,7 @@ Each variant is packaged as a ZIP and also prepared in a `staging` directory for
 - `installer/ui_texts/`
   Localized installer UI texts with English fallback.
 - `dist/`
-  Output packages, staging folders, and versioned reports.
+  Versioned build output, including `release-packages/`, `installer-bundle/`, `packages/`, `staging/`, and reports.
 - `dist-installer/`
   Output executable for the installer.
 
@@ -174,7 +187,9 @@ Build application order:
 1. `translation.ini` provides the language base translation.
 2. `modified_global.ini` fully replaces a key value.
 3. `components.ini` appends its suffix on top of the base.
-4. `blueprints.ini` appends its suffix on top of the base or the already-extended variant.
+4. `reputation.ini` appends reputation metadata on top of the current variant.
+5. `blueprints.ini` appends blueprint-specific markers and contract metadata.
+6. `transport.ini` appends route metadata for transport-style contracts.
 
 Use `modified_global.ini` for:
 
@@ -185,9 +200,9 @@ Do not add those extra keys to `translation.ini`. The build keeps `translation.i
 
 For compatibility, if an old overlay still stores the full text instead of only the suffix, the pipeline automatically trims the base prefix before appending it.
 
-`components.ini` and `blueprints.ini` support `@KEY@` references that are resolved against the effective language base.
+`components.ini`, `blueprints.ini`, `reputation.ini`, and `transport.ini` support `@KEY@` references that are resolved against the effective language base.
 
-`blueprints.ini` also supports language-local auxiliary tokens written as `##token##`.
+Mission metadata overlays also support language-local auxiliary tokens written as `##token##`.
 These tokens are resolved from:
 
 - `source/languages/<language>/auxiliary_keys.ini`
@@ -199,13 +214,13 @@ potential_blueprints=Potential Blueprints
 regional_variants=Regional variants
 ```
 
-Then inside `blueprints.ini`:
+Then inside an overlay such as `blueprints.ini`:
 
 ```ini
 SomeMission_desc_001=\n\n\n\n<EM4>##potential_blueprints##</EM4>\n- @item_Nameexample@
 ```
 
-This enables a lower-maintenance workflow for blueprints:
+This enables a lower-maintenance workflow for blueprints and other generated mission metadata:
 
 - keep a common `source/shared/overlays/blueprints.ini` for content shared by every language;
 - add `source/languages/<language>/overlays/blueprints.ini` only when that language needs an override;
@@ -215,10 +230,13 @@ Blueprint rewards can also be maintained from a structured source:
 
 - `source/blueprints/blueprints_template.ini`
 - `source/blueprints/pools.json`
+- `source/blueprints/contracts_metadata.json`
 
 `pools.json` stores reusable visible reward pools and a `mission_pool_map` that links each
-`*_desc*` key to one pool. When both files exist, `build_distributions.py` generates the
-effective shared `blueprints.ini` in memory before packaging, so GitHub workflows do not
+`*_desc*` key to one pool. `contracts_metadata.json` stores promoted contract metadata such as
+reputation tags, blueprint flags, scenario progress points, and tier labels extracted from
+`contracts.ini` review work. When these files exist, `build_distributions.py` generates the
+effective mission-metadata overlays in memory before packaging, so GitHub workflows do not
 depend on a materialized `source/shared/overlays/blueprints.ini`.
 
 The blueprint review workflow can also infer new mission mappings from `Game2.dcb`,
@@ -263,15 +281,18 @@ python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translatio
 
 The build creates:
 
-- `dist/<version>/packages/star-citizen-<language>-<version>-base.zip`
-- `dist/<version>/packages/star-citizen-<language>-<version>-componentes.zip`
-- `dist/<version>/packages/star-citizen-<language>-<version>-blueprints.zip`
-- `dist/<version>/packages/star-citizen-<language>-<version>-componentes-blueprints.zip`
+- `dist/<version>/release-packages/star-citizen-<language>-<version>.zip`
+  Public ZIP package for manual install, built from `componentes-blueprints`.
+- `dist/<version>/installer-bundle/star-citizen-installer-assets-<version>.zip`
+  Technical bundle used by the installer for remote updates.
+- `dist/<version>/packages/star-citizen-<language>-<version>-<variant>.zip`
+  Internal compatibility artifacts for the installer pipeline.
 - `dist/<version>/staging/<language>/<variant>/`
 - `dist/<version>/reports/missing-keys-<language>.ini`
 - `dist/<version>/reports/summary.txt`
+- `dist/<version>/reports/manifest.json`
 
-Each ZIP package contains:
+Each public ZIP package contains:
 
 - `user.cfg`
 - `data/Localization/<game_language>/global.ini`
@@ -331,8 +352,9 @@ The app:
 - tries to detect `LIVE`, `EPTU`, or `PTU` paths;
 - accepts either the channel folder or the `StarCitizen` root;
 - detects available languages in `staging`;
-- allows selecting the language before the variant;
-- allows choosing `base`, `componentes`, `blueprints`, or `componentes-blueprints`;
+- allows selecting the language before the overlay combination;
+- currently exposes checkboxes for `componentes` and `blueprints`, then resolves them to the internal variant bundle;
+- the `blueprints` checkbox currently implies the full mission-metadata stack: reputation, blueprint markers, and transport-route metadata;
 - copies `user.cfg` and `data/Localization/<game_language>/global.ini`;
 - warns when the target path requires administrator privileges.
 
@@ -369,7 +391,7 @@ You can also open the app directly in script mode:
 2. Update `source/languages/<language>/translation.ini`.
 3. Adjust `source/languages/<language>/overlays/*.ini` if needed.
 4. Run `build_distributions.py`.
-5. Distribute the ZIPs or generate the installer with `build_installer.py`.
+5. Publish `release-packages/*.zip` for manual installs, or generate the installer with `build_installer.py` for custom overlay combinations.
 
 ### Automated GitHub release workflow
 
@@ -380,7 +402,13 @@ You can also open the app directly in script mode:
   1. Update `VERSION` in `develop`.
   2. Commit the extracted `input/current/global.ini` and the localization changes for that patch.
   3. Merge `develop` into `main`.
-  4. Let the workflow build packages, the installer, the manifest, and the GitHub release from that merge commit.
+  4. Let the workflow build the final per-language ZIPs, the installer bundle, the installer executable, the manifest, and the GitHub release from that merge commit.
+
+Release publishing model:
+
+- GitHub releases should expose `release-packages/*.zip` as the manual-download artifacts.
+- Overlay combinations that are "mix and match" for the user should be treated as installer-only behavior.
+- `installer-bundle/*.zip` is a technical asset for the installer update flow, not the primary manual-download artifact.
 
 Release encoding note:
 
@@ -410,7 +438,7 @@ Repositorio para mantener, validar y distribuir localizaciones de Star Citizen.
 El proyecto cubre tres tareas:
 
 - mantener memorias maestras de traduccion por idioma en `source/languages/<idioma>/`;
-- generar paquetes listos para copiar en `LIVE`, con variantes y overlays;
+- generar paquetes finales listos para copiar en `LIVE`, con un ZIP publico por idioma;
 - construir un instalador de Windows para aplicar la traduccion sobre una instalacion existente.
 
 ### Creditos y origen del contenido
@@ -437,6 +465,8 @@ La estructura esperada por idioma es:
 - `overlays/modified_global.ini`
 - `overlays/components.ini`
 - `overlays/blueprints.ini`
+- `overlays/reputation.ini`
+- `overlays/transport.ini`
 - `user.cfg` opcional
 
 `blueprints.ini` puede ser especifico del idioma o compartido. Si falta el
@@ -467,14 +497,25 @@ El ingles queda preparado como idioma base usando el `global.ini` original y sus
 
 ### Que genera este repo
 
-El pipeline genera cuatro variantes:
+El pipeline genera dos capas de salida:
+
+- paquetes publicos de release: un ZIP por idioma con todos los overlays soportados ya aplicados;
+- assets del instalador: la matriz interna de variantes en `staging` para que el instalador pueda ofrecer combinaciones de overlays.
+
+Las variantes internas actuales son:
 
 - `base`
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
 
-Cada variante termina empaquetada como ZIP y, ademas, se deja preparada en un directorio `staging` para el instalador.
+Internamente, la pila de metadatos de misiones ya esta separada en capas:
+
+- `reputation`
+- `blueprints`
+- `transport`
+
+No se publican como ZIPs independientes. El instalador las sigue presentando como una sola opcion `blueprints` hasta que se expongan combinaciones mas finas de forma deliberada.
 
 ### Estructura del proyecto
 
@@ -491,7 +532,7 @@ Cada variante termina empaquetada como ZIP y, ademas, se deja preparada en un di
 - `installer/ui_texts/`
   Textos localizados de la interfaz del instalador, con fallback a ingles.
 - `dist/`
-  Salida de paquetes, staging y reportes por version.
+  Salida versionada del build, incluyendo `release-packages/`, `installer-bundle/`, `packages/`, `staging/` y reportes.
 - `dist-installer/`
   Salida del ejecutable del instalador.
 
@@ -581,7 +622,9 @@ El orden de aplicacion durante el build es:
 1. `translation.ini` aporta la traduccion base del idioma.
 2. `modified_global.ini` reemplaza por completo el valor de una clave.
 3. `components.ini` concatena su sufijo sobre la base.
-4. `blueprints.ini` concatena su sufijo sobre la base o sobre la variante ya extendida.
+4. `reputation.ini` anade metadatos de reputacion sobre la variante actual.
+5. `blueprints.ini` anade marcas y metadatos especificos de blueprints.
+6. `transport.ini` anade metadatos de ruta para contratos de transporte.
 
 Usa `modified_global.ini` para:
 
@@ -592,9 +635,9 @@ No metas esas claves extra en `translation.ini`. El build mantiene `translation.
 
 Por compatibilidad, si un overlay antiguo todavia guarda el texto completo en vez del sufijo, el pipeline recorta automaticamente el prefijo base antes de anexarlo.
 
-Los overlays `components.ini` y `blueprints.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
+Los overlays `components.ini`, `blueprints.ini`, `reputation.ini` y `transport.ini` admiten referencias `@KEY@` que se resuelven contra la base efectiva del idioma.
 
-`blueprints.ini` tambien admite tokens auxiliares por idioma escritos como `##token##`.
+Los overlays de metadatos de misiones tambien admiten tokens auxiliares por idioma escritos como `##token##`.
 Estos tokens se resuelven desde:
 
 - `source/languages/<idioma>/auxiliary_keys.ini`
@@ -606,13 +649,13 @@ potential_blueprints=Planos potenciales
 regional_variants=Variantes regionales
 ```
 
-Y dentro de `blueprints.ini`:
+Y dentro de un overlay como `blueprints.ini`:
 
 ```ini
 SomeMission_desc_001=\n\n\n\n<EM4>##potential_blueprints##</EM4>\n- @item_Nameexample@
 ```
 
-Esto permite un flujo de mantenimiento mas simple para blueprints:
+Esto permite un flujo de mantenimiento mas simple para blueprints y otros metadatos generados de misiones:
 
 - mantener un `source/shared/overlays/blueprints.ini` comun para contenido compartido por todos los idiomas;
 - anadir `source/languages/<idioma>/overlays/blueprints.ini` solo cuando ese idioma necesite un override;
@@ -622,10 +665,13 @@ Las recompensas de blueprints tambien pueden mantenerse desde una fuente estruct
 
 - `source/blueprints/blueprints_template.ini`
 - `source/blueprints/pools.json`
+- `source/blueprints/contracts_metadata.json`
 
 `pools.json` guarda pools reutilizables de recompensas visibles y un `mission_pool_map` que
-enlaza cada clave `*_desc*` con una pool. Si ambos ficheros existen, `build_distributions.py`
-genera en memoria el `blueprints.ini` compartido efectivo antes de empaquetar.
+enlaza cada clave `*_desc*` con una pool. `contracts_metadata.json` guarda metadatos de contratos
+promocionados desde el analisis de `contracts.ini`, como tags de reputacion, flags de blueprint,
+scenario progress points y tier labels. Si estos ficheros existen, `build_distributions.py`
+genera en memoria los overlays efectivos de metadatos de misiones antes de empaquetar.
 
 Scripts utiles:
 
@@ -663,15 +709,18 @@ python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translatio
 
 El build crea:
 
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-base.zip`
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-componentes.zip`
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-blueprints.zip`
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-componentes-blueprints.zip`
+- `dist/<version>/release-packages/star-citizen-<idioma>-<version>.zip`
+  ZIP publico para instalacion manual, generado a partir de `componentes-blueprints`.
+- `dist/<version>/installer-bundle/star-citizen-installer-assets-<version>.zip`
+  Bundle tecnico usado por el instalador para actualizaciones remotas.
+- `dist/<version>/packages/star-citizen-<idioma>-<version>-<variant>.zip`
+  Artefactos internos de compatibilidad para el pipeline del instalador.
 - `dist/<version>/staging/<idioma>/<variant>/`
 - `dist/<version>/reports/missing-keys-<idioma>.ini`
 - `dist/<version>/reports/summary.txt`
+- `dist/<version>/reports/manifest.json`
 
-Cada paquete ZIP contiene:
+Cada ZIP publico contiene:
 
 - `user.cfg`
 - `data/Localization/<game_language>/global.ini`
@@ -730,8 +779,9 @@ La app:
 - intenta detectar rutas `LIVE`, `EPTU` o `PTU`;
 - acepta la carpeta de canal o la raiz de `StarCitizen`;
 - detecta los idiomas disponibles en el `staging`;
-- permite elegir idioma antes de la variante;
-- permite elegir `base`, `componentes`, `blueprints` o `componentes-blueprints`;
+- permite elegir idioma antes de la combinacion de overlays;
+- expone checkboxes para `componentes` y `blueprints`, y resuelve esa eleccion a la variante interna correspondiente;
+- la opcion `blueprints` implica hoy toda la pila de metadatos de misiones: reputacion, marcas de blueprint y rutas de transporte;
 - copia `user.cfg` y `data/Localization/<game_language>/global.ini`;
 - avisa cuando la ruta requiere permisos de administrador.
 
@@ -769,7 +819,7 @@ Tambien puedes abrir la app directamente en modo script:
 2. Actualiza `source/languages/<idioma>/translation.ini`.
 3. Ajusta `source/languages/<idioma>/overlays/*.ini` si hace falta.
 4. Ejecuta `build_distributions.py`.
-5. Distribuye los ZIP o genera el instalador con `build_installer.py`.
+5. Publica `release-packages/*.zip` para instalaciones manuales, o genera el instalador con `build_installer.py` para combinaciones personalizadas de overlays.
 
 ### Flujo automatizado de release en GitHub
 
@@ -780,7 +830,13 @@ Tambien puedes abrir la app directamente en modo script:
   1. Actualiza `VERSION` en `develop`.
   2. Sube `input/current/global.ini` extraido y los cambios de localizacion del parche.
   3. Fusiona `develop` en `main`.
-  4. Deja que el workflow construya paquetes, instalador, manifiesto y release de GitHub a partir de ese merge commit.
+  4. Deja que el workflow construya los ZIP finales por idioma, el bundle del instalador, el ejecutable, el manifiesto y la release de GitHub a partir de ese merge commit.
+
+Modelo de publicacion de release:
+
+- Las releases de GitHub deben exponer `release-packages/*.zip` como artefactos de descarga manual.
+- Las combinaciones de overlays "a gusto del consumidor" deben tratarse como comportamiento exclusivo del instalador.
+- `installer-bundle/*.zip` es un asset tecnico para el flujo de actualizacion del instalador, no el artefacto principal de descarga manual.
 
 Nota de codificacion para releases:
 
