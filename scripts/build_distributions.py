@@ -21,8 +21,10 @@ from scripts.language_support import (
     write_staged_language_metadata,
 )
 from blueprint_pool_source import (
+    default_contract_metadata_source_path,
     default_blueprint_source_paths,
     generate_blueprints_overlay_data,
+    load_contract_metadata_source,
 )
 from localization_tools import (
     Entry,
@@ -131,6 +133,31 @@ def collect_overlay_extra_entries(
     return [extras_by_key[key] for key in ordered_keys]
 
 
+def align_overlay_keys_to_english(
+    *,
+    overlay_map: dict[str, str],
+    english_map: dict[str, str],
+) -> dict[str, str]:
+    normalized_to_english: dict[str, list[str]] = {}
+    for english_key in english_map:
+        normalized_to_english.setdefault(english_key.split(",", 1)[0], []).append(english_key)
+
+    aligned: dict[str, str] = {}
+    for key, value in overlay_map.items():
+        if key in english_map:
+            aligned[key] = value
+            continue
+
+        candidates = normalized_to_english.get(key.split(",", 1)[0], [])
+        if len(candidates) == 1:
+            aligned[candidates[0]] = value
+            continue
+
+        aligned[key] = value
+
+    return aligned
+
+
 def validate_output_entries(*, english_entries, output_entries, label: str) -> list[str]:
     errors: list[str] = []
     english_entries = list(english_entries)
@@ -230,6 +257,16 @@ def create_package(
                 archive.write(file_path, file_path.relative_to(package_root))
 
 
+def create_archive_from_root(*, archive_root: Path, zip_path: Path) -> None:
+    if zip_path.exists():
+        zip_path.unlink()
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for file_path in archive_root.rglob("*"):
+            if file_path.is_file():
+                archive.write(file_path, file_path.relative_to(archive_root))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generates ZIP distributions for localization by language.")
     parser.add_argument("--english-global-ini", default="input/current/global.ini")
@@ -251,7 +288,13 @@ def main() -> int:
     english_absolute = resolve_path(args.english_global_ini)
     output_absolute = resolve_path(args.output_root)
     blueprint_template_source, blueprint_pool_source = default_blueprint_source_paths(REPO_ROOT)
+    contract_metadata_source = default_contract_metadata_source_path(REPO_ROOT)
     structured_blueprints_available = blueprint_template_source.exists() and blueprint_pool_source.exists()
+    contract_metadata_payload = (
+        load_contract_metadata_source(contract_metadata_source)
+        if contract_metadata_source.exists()
+        else None
+    )
 
     if not english_absolute.exists():
         raise FileNotFoundError(f"Required file missing: {english_absolute}")
@@ -259,15 +302,25 @@ def main() -> int:
     english_data = normalize_global_ini_data(read_global_ini(english_absolute))
     version_root = output_absolute / args.version
     packages_root = version_root / "packages"
+    release_packages_root = version_root / "release-packages"
+    installer_bundle_root = version_root / "installer-bundle"
     staging_root = version_root / "staging"
     reports_root = version_root / "reports"
 
-    for directory in (packages_root, staging_root, reports_root):
+    for directory in (packages_root, release_packages_root, installer_bundle_root, staging_root, reports_root):
         directory.mkdir(parents=True, exist_ok=True)
 
     languages = [find_source_language(resolve_path("."), args.language)] if args.language else discover_source_languages(resolve_path("."))
 
     summary_lines = [f"Version: {args.version}"]
+    if contract_metadata_payload is not None:
+        summary_lines.extend(
+            (
+                f"Contracts metadata source: {contract_metadata_source.relative_to(REPO_ROOT).as_posix()}",
+                f"Contracts title metadata: {len(contract_metadata_payload['title_meta'])}",
+                f"Contracts description metadata: {len(contract_metadata_payload['description_meta'])}",
+            )
+        )
     total_missing = 0
 
     for language in languages:
@@ -345,6 +398,10 @@ def main() -> int:
         blueprints_overlay_map = merge_overlay_maps(
             shared_blueprints_overlay.mapping if shared_blueprints_overlay is not None else {},
             specific_blueprints_overlay.mapping if specific_blueprints_overlay is not None else {},
+        )
+        blueprints_overlay_map = align_overlay_keys_to_english(
+            overlay_map=blueprints_overlay_map,
+            english_map=english_data.mapping,
         )
         auxiliary_keys_map = (
             read_global_ini(language.auxiliary_keys).mapping if language.auxiliary_keys is not None else {}
@@ -480,6 +537,15 @@ def main() -> int:
                 user_cfg_source=user_cfg_absolute,
             )
 
+        release_zip_path = release_packages_root / f"star-citizen-{language.code}-{args.version}.zip"
+        create_package(
+            package_root=language_staging_root / "componentes-blueprints",
+            zip_path=release_zip_path,
+            entries=combined_entries,
+            game_language=language.game_language,
+            user_cfg_source=user_cfg_absolute,
+        )
+
         missing_report_path = reports_root / f"missing-keys-{language.code}.ini"
         write_global_ini(entries=reported_missing_entries, path=missing_report_path)
         total_missing += reported_missing_count
@@ -500,9 +566,17 @@ def main() -> int:
     with summary_path.open("w", encoding="utf-8-sig", newline="\n") as file_handle:
         file_handle.write("\n".join(summary_lines))
 
+    installer_bundle_zip_path = installer_bundle_root / f"star-citizen-installer-assets-{args.version}.zip"
+    create_archive_from_root(
+        archive_root=staging_root,
+        zip_path=installer_bundle_zip_path,
+    )
+
     print(f"Completed build for version {args.version}")
     print(f"Pending translations: {total_missing}")
     print(f"Packages: {packages_root}")
+    print(f"Release packages: {release_packages_root}")
+    print(f"Installer bundle: {installer_bundle_zip_path}")
     return 0
 
 

@@ -19,8 +19,11 @@ for candidate in (CORE_DIR, SCRIPTS_DIR):
 
 from blueprint_pool_source import (  # noqa: E402
     GENERIC_BLUEPRINT_BLOCK_PREFIX,
+    _apply_contract_metadata,
+    default_contract_metadata_source_path,
     default_blueprint_source_paths,
     generate_blueprints_overlay_data,
+    load_contract_metadata_source,
     resolve_pool_tokens,
 )
 from dcb_text_support import build_title_index, split_strings_with_offsets  # noqa: E402
@@ -70,6 +73,12 @@ class BlueprintExtractorCoreTests(unittest.TestCase):
         template_path, pools_path = default_blueprint_source_paths(REPO_ROOT)
         self.assertEqual(template_path, REPO_ROOT / "source" / "blueprints" / "blueprints_template.ini")
         self.assertEqual(pools_path, REPO_ROOT / "source" / "blueprints" / "pools.json")
+
+    def test_default_contract_metadata_source_path(self) -> None:
+        self.assertEqual(
+            default_contract_metadata_source_path(REPO_ROOT),
+            REPO_ROOT / "source" / "blueprints" / "contracts_metadata.json",
+        )
 
     def test_resolve_starbreaker_path_accepts_nested_repo_binary(self) -> None:
         resolved = resolve_starbreaker_path("tools/starbreaker.exe")
@@ -228,6 +237,181 @@ class BlueprintExtractorCoreTests(unittest.TestCase):
                     template_path=template_path,
                     pool_source_path=pools_path,
                 )
+
+    def test_apply_contract_metadata_injects_description_lines_before_blueprints(self) -> None:
+        contract_metadata = {
+            "title_meta": {},
+            "description_meta": {
+                "mission_desc": {
+                    "reputation_awarded": ["100"],
+                    "scenario_progress_points": ["50"],
+                    "tier_labels": ["Jr. Contractor"],
+                }
+            },
+        }
+
+        rendered = _apply_contract_metadata(
+            entry_key="mission_desc",
+            value="\\n\\n<EM4>##potential_blueprints##</EM4>\\n@BP_POOL@",
+            contract_metadata=contract_metadata,
+        )
+
+        self.assertIn("<EM4>##reputation_awarded##:</EM4> 100", rendered)
+        self.assertIn("<EM4>##scenario_progress_points##:</EM4> 50", rendered)
+        self.assertIn("<EM4>##awarded_in_junior_contractor_rank_variants##</EM4>", rendered)
+        self.assertLess(rendered.index("##scenario_progress_points##"), rendered.index("##potential_blueprints##"))
+
+    def test_apply_contract_metadata_rewrites_bp_title_suffix_with_rep_prefix(self) -> None:
+        contract_metadata = {
+            "title_meta": {
+                "mission_title": {
+                    "rep_ranges": ["100"],
+                    "blueprint_flag_uncertain": True,
+                }
+            },
+            "description_meta": {},
+        }
+
+        rendered = _apply_contract_metadata(
+            entry_key="mission_title",
+            value=" <EM4>[BP]</EM4>",
+            contract_metadata=contract_metadata,
+        )
+
+        self.assertEqual(rendered, " <EM4>[100 Rep] [BP]*</EM4>")
+
+    def test_apply_contract_metadata_appends_metadata_without_blueprint_block(self) -> None:
+        contract_metadata = {
+            "title_meta": {},
+            "description_meta": {
+                "mission_desc": {
+                    "reputation_awarded": ["75"],
+                    "scenario_progress_points": ["20"],
+                    "tier_labels": [],
+                }
+            },
+        }
+
+        rendered = _apply_contract_metadata(
+            entry_key="mission_desc",
+            value="",
+            contract_metadata=contract_metadata,
+        )
+
+        self.assertIn("<EM4>##reputation_awarded##:</EM4> 75", rendered)
+        self.assertIn("<EM4>##scenario_progress_points##:</EM4> 20", rendered)
+        self.assertNotIn("##potential_blueprints##", rendered)
+
+    def test_apply_contract_metadata_adds_rep_only_title_without_bp_flag(self) -> None:
+        contract_metadata = {
+            "title_meta": {
+                "mission_title": {
+                    "blueprint_flag": False,
+                    "blueprint_flag_uncertain": False,
+                    "rep_ranges": ["150"],
+                }
+            },
+            "description_meta": {},
+        }
+
+        rendered = _apply_contract_metadata(
+            entry_key="mission_title",
+            value="",
+            contract_metadata=contract_metadata,
+        )
+
+        self.assertEqual(rendered, " <EM4>[150 Rep]</EM4>")
+
+    def test_load_contract_metadata_source_reads_expected_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            metadata_path = Path(temp_dir) / "contracts_metadata.json"
+            metadata_path.write_text(
+                json.dumps(
+                    {
+                        "title_meta": {
+                            "mission_title": {
+                                "blueprint_flag": True,
+                                "blueprint_flag_uncertain": False,
+                                "rep_ranges": ["100"],
+                            }
+                        },
+                        "description_meta": {
+                            "mission_desc": {
+                                "classification": "new-tier-label-only",
+                                "tier_labels": ["Jr. Contractor"],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            payload = load_contract_metadata_source(metadata_path)
+
+        self.assertIn("title_meta", payload)
+        self.assertIn("description_meta", payload)
+
+    def test_generate_blueprints_overlay_data_adds_metadata_only_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            template_path = Path(temp_dir) / "blueprints_template.ini"
+            pools_path = Path(temp_dir) / "pools.json"
+            metadata_path = Path(temp_dir) / "contracts_metadata.json"
+            template_path.write_text("mission_with_pool=\\n\\n<EM4>##potential_blueprints##</EM4>\\n@BP_POOL@\n", encoding="utf-8")
+            pools_path.write_text(
+                json.dumps(
+                    {
+                        "pools": {
+                            "BP_POOL_SIMPLE": {
+                                "item_refs": ["item_test"],
+                            }
+                        },
+                        "mission_pool_map": {
+                            "mission_with_pool": "BP_POOL_SIMPLE",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            metadata_path.write_text(
+                json.dumps(
+                    {
+                        "title_meta": {
+                            "mission_title_only": {
+                                "blueprint_flag": False,
+                                "blueprint_flag_uncertain": False,
+                                "rep_ranges": ["200"],
+                            }
+                        },
+                        "description_meta": {
+                            "mission_desc_only": {
+                                "classification": "new-metadata-only",
+                                "reputation_awarded": ["80"],
+                                "scenario_progress_points": ["40"],
+                                "tier_labels": [],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch("blueprint_pool_source.default_contract_metadata_source_path", return_value=metadata_path):
+                generated = generate_blueprints_overlay_data(
+                    template_path=template_path,
+                    pool_source_path=pools_path,
+                )
+
+        self.assertEqual(generated.mapping["mission_title_only"], " <EM4>[200 Rep]</EM4>")
+        self.assertIn("<EM4>##reputation_awarded##:</EM4> 80", generated.mapping["mission_desc_only"])
+        self.assertIn("<EM4>##scenario_progress_points##:</EM4> 40", generated.mapping["mission_desc_only"])
+
+    def test_load_contract_metadata_source_rejects_missing_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            metadata_path = Path(temp_dir) / "contracts_metadata.json"
+            metadata_path.write_text(json.dumps({"title_meta": {}}), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "title_meta` o `description_meta"):
+                load_contract_metadata_source(metadata_path)
 
 
 if __name__ == "__main__":

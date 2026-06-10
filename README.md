@@ -7,7 +7,7 @@ Repository to maintain, validate, and distribute Star Citizen localizations.
 This project covers three tasks:
 
 - maintain master translation memories per language in `source/languages/<language>/`;
-- generate ready-to-copy packages for `LIVE`, with variants and overlays;
+- generate final ready-to-copy packages for `LIVE`, one public ZIP per language;
 - build a Windows installer to apply the localization over an existing installation.
 
 ### Credits and source material
@@ -60,14 +60,17 @@ English is prepared as a base language using the original `global.ini` plus its 
 
 ### What this repository generates
 
-The pipeline generates four variants:
+The pipeline generates two output layers:
+
+- public release packages: one ZIP per language with all supported overlays already applied;
+- installer assets: the internal variant matrix kept in `staging` so the installer can offer overlay combinations.
+
+The current internal variants are:
 
 - `base`
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
-
-Each variant is packaged as a ZIP and also prepared in a `staging` directory for the installer.
 
 ### Project structure
 
@@ -84,7 +87,7 @@ Each variant is packaged as a ZIP and also prepared in a `staging` directory for
 - `installer/ui_texts/`
   Localized installer UI texts with English fallback.
 - `dist/`
-  Output packages, staging folders, and versioned reports.
+  Versioned build output, including `release-packages/`, `installer-bundle/`, `packages/`, `staging/`, and reports.
 - `dist-installer/`
   Output executable for the installer.
 
@@ -263,15 +266,18 @@ python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translatio
 
 The build creates:
 
-- `dist/<version>/packages/star-citizen-<language>-<version>-base.zip`
-- `dist/<version>/packages/star-citizen-<language>-<version>-componentes.zip`
-- `dist/<version>/packages/star-citizen-<language>-<version>-blueprints.zip`
-- `dist/<version>/packages/star-citizen-<language>-<version>-componentes-blueprints.zip`
+- `dist/<version>/release-packages/star-citizen-<language>-<version>.zip`
+  Public ZIP package for manual install, built from `componentes-blueprints`.
+- `dist/<version>/installer-bundle/star-citizen-installer-assets-<version>.zip`
+  Technical bundle used by the installer for remote updates.
+- `dist/<version>/packages/star-citizen-<language>-<version>-<variant>.zip`
+  Internal compatibility artifacts for the installer pipeline.
 - `dist/<version>/staging/<language>/<variant>/`
 - `dist/<version>/reports/missing-keys-<language>.ini`
 - `dist/<version>/reports/summary.txt`
+- `dist/<version>/reports/manifest.json`
 
-Each ZIP package contains:
+Each public ZIP package contains:
 
 - `user.cfg`
 - `data/Localization/<game_language>/global.ini`
@@ -331,8 +337,8 @@ The app:
 - tries to detect `LIVE`, `EPTU`, or `PTU` paths;
 - accepts either the channel folder or the `StarCitizen` root;
 - detects available languages in `staging`;
-- allows selecting the language before the variant;
-- allows choosing `base`, `componentes`, `blueprints`, or `componentes-blueprints`;
+- allows selecting the language before the overlay combination;
+- currently exposes checkboxes for `componentes` and `blueprints`, then resolves them to the internal variant bundle;
 - copies `user.cfg` and `data/Localization/<game_language>/global.ini`;
 - warns when the target path requires administrator privileges.
 
@@ -369,7 +375,7 @@ You can also open the app directly in script mode:
 2. Update `source/languages/<language>/translation.ini`.
 3. Adjust `source/languages/<language>/overlays/*.ini` if needed.
 4. Run `build_distributions.py`.
-5. Distribute the ZIPs or generate the installer with `build_installer.py`.
+5. Publish `release-packages/*.zip` for manual installs, or generate the installer with `build_installer.py` for custom overlay combinations.
 
 ### Automated GitHub release workflow
 
@@ -380,7 +386,13 @@ You can also open the app directly in script mode:
   1. Update `VERSION` in `develop`.
   2. Commit the extracted `input/current/global.ini` and the localization changes for that patch.
   3. Merge `develop` into `main`.
-  4. Let the workflow build packages, the installer, the manifest, and the GitHub release from that merge commit.
+  4. Let the workflow build the final per-language ZIPs, the installer bundle, the installer executable, the manifest, and the GitHub release from that merge commit.
+
+Release publishing model:
+
+- GitHub releases should expose `release-packages/*.zip` as the manual-download artifacts.
+- Overlay combinations that are "mix and match" for the user should be treated as installer-only behavior.
+- `installer-bundle/*.zip` is a technical asset for the installer update flow, not the primary manual-download artifact.
 
 Release encoding note:
 
@@ -410,7 +422,7 @@ Repositorio para mantener, validar y distribuir localizaciones de Star Citizen.
 El proyecto cubre tres tareas:
 
 - mantener memorias maestras de traduccion por idioma en `source/languages/<idioma>/`;
-- generar paquetes listos para copiar en `LIVE`, con variantes y overlays;
+- generar paquetes finales listos para copiar en `LIVE`, con un ZIP publico por idioma;
 - construir un instalador de Windows para aplicar la traduccion sobre una instalacion existente.
 
 ### Creditos y origen del contenido
@@ -467,14 +479,17 @@ El ingles queda preparado como idioma base usando el `global.ini` original y sus
 
 ### Que genera este repo
 
-El pipeline genera cuatro variantes:
+El pipeline genera dos capas de salida:
+
+- paquetes publicos de release: un ZIP por idioma con todos los overlays soportados ya aplicados;
+- assets del instalador: la matriz interna de variantes en `staging` para que el instalador pueda ofrecer combinaciones de overlays.
+
+Las variantes internas actuales son:
 
 - `base`
 - `componentes`
 - `blueprints`
 - `componentes-blueprints`
-
-Cada variante termina empaquetada como ZIP y, ademas, se deja preparada en un directorio `staging` para el instalador.
 
 ### Estructura del proyecto
 
@@ -491,7 +506,7 @@ Cada variante termina empaquetada como ZIP y, ademas, se deja preparada en un di
 - `installer/ui_texts/`
   Textos localizados de la interfaz del instalador, con fallback a ingles.
 - `dist/`
-  Salida de paquetes, staging y reportes por version.
+  Salida versionada del build, incluyendo `release-packages/`, `installer-bundle/`, `packages/`, `staging/` y reportes.
 - `dist-installer/`
   Salida del ejecutable del instalador.
 
@@ -663,15 +678,18 @@ python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translatio
 
 El build crea:
 
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-base.zip`
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-componentes.zip`
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-blueprints.zip`
-- `dist/<version>/packages/star-citizen-<idioma>-<version>-componentes-blueprints.zip`
+- `dist/<version>/release-packages/star-citizen-<idioma>-<version>.zip`
+  ZIP publico para instalacion manual, generado a partir de `componentes-blueprints`.
+- `dist/<version>/installer-bundle/star-citizen-installer-assets-<version>.zip`
+  Bundle tecnico usado por el instalador para actualizaciones remotas.
+- `dist/<version>/packages/star-citizen-<idioma>-<version>-<variant>.zip`
+  Artefactos internos de compatibilidad para el pipeline del instalador.
 - `dist/<version>/staging/<idioma>/<variant>/`
 - `dist/<version>/reports/missing-keys-<idioma>.ini`
 - `dist/<version>/reports/summary.txt`
+- `dist/<version>/reports/manifest.json`
 
-Cada paquete ZIP contiene:
+Cada ZIP publico contiene:
 
 - `user.cfg`
 - `data/Localization/<game_language>/global.ini`
@@ -730,8 +748,8 @@ La app:
 - intenta detectar rutas `LIVE`, `EPTU` o `PTU`;
 - acepta la carpeta de canal o la raiz de `StarCitizen`;
 - detecta los idiomas disponibles en el `staging`;
-- permite elegir idioma antes de la variante;
-- permite elegir `base`, `componentes`, `blueprints` o `componentes-blueprints`;
+- permite elegir idioma antes de la combinacion de overlays;
+- expone checkboxes para `componentes` y `blueprints`, y resuelve esa eleccion a la variante interna correspondiente;
 - copia `user.cfg` y `data/Localization/<game_language>/global.ini`;
 - avisa cuando la ruta requiere permisos de administrador.
 
@@ -769,7 +787,7 @@ Tambien puedes abrir la app directamente en modo script:
 2. Actualiza `source/languages/<idioma>/translation.ini`.
 3. Ajusta `source/languages/<idioma>/overlays/*.ini` si hace falta.
 4. Ejecuta `build_distributions.py`.
-5. Distribuye los ZIP o genera el instalador con `build_installer.py`.
+5. Publica `release-packages/*.zip` para instalaciones manuales, o genera el instalador con `build_installer.py` para combinaciones personalizadas de overlays.
 
 ### Flujo automatizado de release en GitHub
 
@@ -780,7 +798,13 @@ Tambien puedes abrir la app directamente en modo script:
   1. Actualiza `VERSION` en `develop`.
   2. Sube `input/current/global.ini` extraido y los cambios de localizacion del parche.
   3. Fusiona `develop` en `main`.
-  4. Deja que el workflow construya paquetes, instalador, manifiesto y release de GitHub a partir de ese merge commit.
+  4. Deja que el workflow construya los ZIP finales por idioma, el bundle del instalador, el ejecutable, el manifiesto y la release de GitHub a partir de ese merge commit.
+
+Modelo de publicacion de release:
+
+- Las releases de GitHub deben exponer `release-packages/*.zip` como artefactos de descarga manual.
+- Las combinaciones de overlays "a gusto del consumidor" deben tratarse como comportamiento exclusivo del instalador.
+- `installer-bundle/*.zip` es un asset tecnico para el flujo de actualizacion del instalador, no el artefacto principal de descarga manual.
 
 Nota de codificacion para releases:
 

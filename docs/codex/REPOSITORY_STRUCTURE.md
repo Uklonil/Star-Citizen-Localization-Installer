@@ -8,5 +8,7 @@ scripts/
 .codex/skills/sc-blueprint-extractor/scripts/
 installer/
 dist/
+dist/<version>/release-packages/
+dist/<version>/installer-bundle/
 dist-installer/
 informes/

@@ -66,11 +66,23 @@ def build_variant_payload(*, repository: str, version: str, path: Path) -> dict[
     }
 
 
+def build_file_payload(*, repository: str, version: str, path: Path) -> dict[str, object]:
+    filename = path.name
+    return {
+        "filename": filename,
+        "url": f"https://github.com/{repository}/releases/download/{version}/{filename}",
+        "size": path.stat().st_size,
+        "sha256": compute_sha256(path),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Genera manifest.json para una release publicada en GitHub.")
     parser.add_argument("--version", required=True)
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--packages-root")
+    parser.add_argument("--release-packages-root")
+    parser.add_argument("--installer-bundle-path")
     parser.add_argument("--installer-path", default="dist-installer/StarCitizenLocalizationInstaller.exe")
     parser.add_argument("--summary-path")
     parser.add_argument("--output")
@@ -78,43 +90,66 @@ def main() -> int:
 
     version_root = REPO_ROOT / "dist" / args.version
     packages_root = Path(args.packages_root).resolve() if args.packages_root else version_root / "packages"
+    release_packages_root = (
+        Path(args.release_packages_root).resolve()
+        if args.release_packages_root
+        else version_root / "release-packages"
+    )
+    installer_bundle_path = (
+        Path(args.installer_bundle_path).resolve()
+        if args.installer_bundle_path
+        else version_root / "installer-bundle" / f"star-citizen-installer-assets-{args.version}.zip"
+    )
     summary_path = Path(args.summary_path).resolve() if args.summary_path else version_root / "reports" / "summary.txt"
     output_path = Path(args.output).resolve() if args.output else version_root / "reports" / "manifest.json"
     installer_path = Path(args.installer_path).resolve()
 
     if not packages_root.is_dir():
         raise FileNotFoundError(f"No existe el directorio de paquetes: {packages_root}")
+    if not release_packages_root.is_dir():
+        raise FileNotFoundError(f"No existe el directorio de paquetes publicos: {release_packages_root}")
+    if not installer_bundle_path.is_file():
+        raise FileNotFoundError(f"No existe el bundle del instalador: {installer_bundle_path}")
 
     language_metadata = discover_language_metadata()
     manifest_languages: dict[str, dict[str, object]] = {}
 
     for language_code, metadata in language_metadata.items():
-        variants: dict[str, dict[str, object]] = {}
+        variants: list[str] = []
         for variant_name in VARIANT_IDS:
             package_name = f"star-citizen-{language_code}-{args.version}-{variant_name}.zip"
             package_path = packages_root / package_name
             if package_path.is_file():
-                variants[variant_name] = build_variant_payload(
-                    repository=args.repository,
-                    version=args.version,
-                    path=package_path,
-                )
+                variants.append(variant_name)
 
-        if variants:
+        release_package_name = f"star-citizen-{language_code}-{args.version}.zip"
+        release_package_path = release_packages_root / release_package_name
+
+        if variants and release_package_path.is_file():
             manifest_languages[language_code] = {
                 "label": metadata["label"],
                 "game_language": metadata["game_language"],
                 "variants": variants,
+                "package": build_file_payload(
+                    repository=args.repository,
+                    version=args.version,
+                    path=release_package_path,
+                ),
             }
 
     if not manifest_languages:
         raise FileNotFoundError("No se ha encontrado ningun paquete ZIP para construir el manifest.")
 
     payload: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "repository": args.repository,
         "version": args.version,
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "installer_bundle": build_file_payload(
+            repository=args.repository,
+            version=args.version,
+            path=installer_bundle_path,
+        ),
         "languages": manifest_languages,
     }
 
