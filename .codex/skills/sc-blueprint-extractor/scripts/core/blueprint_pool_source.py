@@ -110,12 +110,13 @@ def _title_suffix_from_metadata(
     blueprint_flag_uncertain = bool(title_meta.get("blueprint_flag_uncertain"))
     parts: list[str] = []
     if include_rep:
-        parts.extend(f"[{rep} Rep]" for rep in rep_ranges)
+        if rep_ranges:
+            parts.append("<EM2>" + " ".join(f"[{rep} Rep]" for rep in rep_ranges) + "</EM2>")
     if include_blueprint_flag and (blueprint_flag or blueprint_flag_uncertain):
-        parts.append("[BP]*" if blueprint_flag_uncertain else "[BP]")
+        parts.append(f"<EM4>{'[BP]*' if blueprint_flag_uncertain else '[BP]'}</EM4>")
     if not parts:
         return existing_value
-    rendered = " <EM4>" + " ".join(parts) + "</EM4>"
+    rendered = " " + " ".join(parts)
 
     if TITLE_BP_BLOCK_RE.search(existing_value):
         return TITLE_BP_BLOCK_RE.sub(rendered.strip(), existing_value)
@@ -128,7 +129,7 @@ def _description_reputation_lines(desc_meta: dict[str, object], *, existing_valu
     reputation_awarded = [str(item) for item in desc_meta.get("reputation_awarded", []) if str(item)]
     if reputation_awarded and "##reputation_awarded##" not in existing_value and "##reputation_awarded_by_difficulty##" not in existing_value:
         token = "reputation_awarded_by_difficulty" if any("/" in value for value in reputation_awarded) else "reputation_awarded"
-        lines.append(f"<EM4>##{token}##:</EM4> {' / '.join(reputation_awarded)}")
+        lines.append(f"<EM2>##{token}##:</EM2> {' / '.join(reputation_awarded)}")
 
     return lines
 

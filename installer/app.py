@@ -212,9 +212,16 @@ def main(page: ft.Page) -> None:
     selected_language: LanguageBundle = default_language
     available_variants = [name for name in VARIANT_IDS if name in selected_language.variants]
     default_variant = DEFAULT_VARIANT if DEFAULT_VARIANT in selected_language.variants else available_variants[0]
-    default_components_enabled, default_blueprints_enabled = overlay_selection_from_variant_name(default_variant)
+    (
+        default_components_enabled,
+        default_transport_enabled,
+        default_reputation_enabled,
+        default_blueprints_enabled,
+    ) = overlay_selection_from_variant_name(default_variant)
     selected_overlays = {
         "componentes": default_components_enabled,
+        "transport": default_transport_enabled,
+        "reputation": default_reputation_enabled,
         "blueprints": default_blueprints_enabled,
     }
 
@@ -350,10 +357,14 @@ def main(page: ft.Page) -> None:
         )
 
     def variant_label(variant_name: str) -> str:
-        return strings()[f"variant_{variant_name.replace('-', '_')}_label"]
-
-    def variant_description(variant_name: str) -> str:
-        return strings()[f"variant_{variant_name.replace('-', '_')}_desc"]
+        selected_overlay_names = [
+            overlay_name
+            for overlay_name, is_enabled in zip(OVERLAY_IDS, overlay_selection_from_variant_name(variant_name))
+            if is_enabled
+        ]
+        if not selected_overlay_names:
+            return strings()["variant_base_label"]
+        return " + ".join([strings()["variant_base_label"], *(overlay_label(name) for name in selected_overlay_names)])
 
     def overlay_label(overlay_name: str) -> str:
         return strings()[f"overlay_{overlay_name}_label"]
@@ -364,21 +375,32 @@ def main(page: ft.Page) -> None:
     def selected_variant_name() -> str | None:
         return resolve_variant_name(
             available_variants=selected_language.variants,
-            components_enabled=selected_overlays["componentes"],
+            componentes_enabled=selected_overlays["componentes"],
+            transport_enabled=selected_overlays["transport"],
+            reputation_enabled=selected_overlays["reputation"],
             blueprints_enabled=selected_overlays["blueprints"],
         )
 
     def ensure_overlay_selection(language: LanguageBundle) -> None:
         variant_name = resolve_variant_name(
             available_variants=language.variants,
-            components_enabled=selected_overlays["componentes"],
+            componentes_enabled=selected_overlays["componentes"],
+            transport_enabled=selected_overlays["transport"],
+            reputation_enabled=selected_overlays["reputation"],
             blueprints_enabled=selected_overlays["blueprints"],
         )
         if variant_name is not None:
             return
 
-        default_components, default_blueprints = default_overlay_selection(available_variants=language.variants)
+        (
+            default_components,
+            default_transport,
+            default_reputation,
+            default_blueprints,
+        ) = default_overlay_selection(available_variants=language.variants)
         selected_overlays["componentes"] = default_components
+        selected_overlays["transport"] = default_transport
+        selected_overlays["reputation"] = default_reputation
         selected_overlays["blueprints"] = default_blueprints
 
     def update_status(message: str, *, error: bool = False) -> None:

@@ -46,35 +46,35 @@ def _looks_like_transport_key(key: str) -> bool:
 def _transport_suffix_from_title_key(key: str) -> str | None:
     normalized = key.lower().replace("_", "")
     if "multitosingle" in normalized:
-        return " <EM4>| ##transport_to## ~mission(Destination|name)</EM4>"
+        return " | ##transport_to## ~mission(Destination|name)"
     if "singletomulti" in normalized:
-        return " <EM4>| ##transport_from## ~mission(Location|name)</EM4>"
+        return " | ##transport_from## ~mission(Location|name)"
     if "atob" in normalized:
-        return " <EM4>| ~mission(Location|name) > ~mission(Destination|name)</EM4>"
+        return " | ~mission(Location|name) > ~mission(Destination|name)"
     return None
 
 
 def _transport_suffix_for_shape(*, has_location: bool, has_destination: bool, has_multi_location: bool, has_multi_destination: bool) -> str | None:
     if has_multi_location and not has_multi_destination and has_destination:
-        return " <EM4>| ##transport_to## ~mission(Destination|name)</EM4>"
+        return " | ##transport_to## ~mission(Destination|name)"
     if has_multi_destination and not has_multi_location and has_location:
-        return " <EM4>| ##transport_from## ~mission(Location|name)</EM4>"
+        return " | ##transport_from## ~mission(Location|name)"
     if has_multi_location and has_multi_destination:
         return None
     if has_location and has_destination:
-        return " <EM4>| ~mission(Location|name) > ~mission(Destination|name)</EM4>"
+        return " | ~mission(Location|name) > ~mission(Destination|name)"
     if has_location:
-        return " <EM4>| ##transport_from## ~mission(Location|name)</EM4>"
+        return " | ##transport_from## ~mission(Location|name)"
     if has_destination:
-        return " <EM4>| ##transport_to## ~mission(Destination|name)</EM4>"
+        return " | ##transport_to## ~mission(Destination|name)"
     return None
 
 
 def _transport_suffix_from_description(value: str) -> str | None:
     if MULTI_TO_SINGLE_TOKEN_RE.search(value):
-        return " <EM4>| ##transport_to## ~mission(Destination|name)</EM4>"
+        return " | ##transport_to## ~mission(Destination|name)"
     if SINGLE_TO_MULTI_TOKEN_RE.search(value):
-        return " <EM4>| ##transport_from## ~mission(Location|name)</EM4>"
+        return " | ##transport_from## ~mission(Location|name)"
 
     has_location = LOCATION_PLACEHOLDER_RE.search(value) is not None
     has_destination = DESTINATION_PLACEHOLDER_RE.search(value) is not None
