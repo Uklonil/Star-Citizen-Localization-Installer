@@ -51,6 +51,13 @@ PLACEHOLDER_RE = re.compile(
     r"|(</?EM[1-4]>)"
 )
 KNOWN_EM_TAG_TYPO_RE = re.compile(r"(<EM([1-4])>~mission\([^<\r\n]+\))<EM\2>")
+OVERLAY_VARIANT_ORDER = (
+    "componentes",
+    "transport",
+    "reputation",
+    "blueprints",
+)
+FULL_INSTALLER_VARIANT = "-".join(OVERLAY_VARIANT_ORDER)
 
 
 def normalize_known_markup_typos(value: str) -> str:
@@ -267,6 +274,68 @@ def create_archive_from_root(*, archive_root: Path, zip_path: Path) -> None:
         for file_path in archive_root.rglob("*"):
             if file_path.is_file():
                 archive.write(file_path, file_path.relative_to(archive_root))
+
+
+def variant_name_from_selection(*, selected_overlays: dict[str, bool]) -> str:
+    enabled = [
+        overlay_name
+        for overlay_name in OVERLAY_VARIANT_ORDER
+        if selected_overlays.get(overlay_name, False)
+    ]
+    return "-".join(enabled) if enabled else "base"
+
+
+def build_variant_entries(
+    *,
+    base_entries,
+    components_overlay_map: dict[str, str],
+    transport_overlay_map: dict[str, str],
+    reputation_overlay_map: dict[str, str],
+    blueprints_overlay_map: dict[str, str],
+) -> tuple[tuple[str, list[Entry]], ...]:
+    variants: list[tuple[str, list[Entry]]] = []
+    metadata_sequence = (
+        ("transport", transport_overlay_map),
+        ("reputation", reputation_overlay_map),
+        ("blueprints", blueprints_overlay_map),
+    )
+
+    for components_enabled in (False, True):
+        for metadata_mask in range(0, 1 << len(metadata_sequence)):
+            selected_overlays = {
+                "componentes": components_enabled,
+                "transport": bool(metadata_mask & 0b001),
+                "reputation": bool(metadata_mask & 0b010),
+                "blueprints": bool(metadata_mask & 0b100),
+            }
+            variant_entries = base_entries
+            if components_enabled:
+                variant_entries = apply_overlay(
+                    base_entries=variant_entries,
+                    overlay_map=components_overlay_map,
+                )
+            for index, (_, overlay_map) in enumerate(metadata_sequence):
+                if metadata_mask & (1 << index):
+                    variant_entries = apply_overlay(
+                        base_entries=variant_entries,
+                        overlay_map=overlay_map,
+                    )
+            variants.append(
+                (
+                    variant_name_from_selection(selected_overlays=selected_overlays),
+                    variant_entries,
+                )
+            )
+
+    variants.sort(
+        key=lambda item: (
+            0 if item[0] == "base" else 1,
+            OVERLAY_VARIANT_ORDER.index(item[0].split("-", 1)[0]) if item[0] != "base" else -1,
+            len(item[0].split("-")) if item[0] != "base" else 0,
+            item[0],
+        )
+    )
+    return tuple(variants)
 
 
 def main() -> int:
@@ -635,19 +704,12 @@ def main() -> int:
         base_merge = merge_translations(english_data=english_data, translation_map=translation_map)
         base_entries = apply_replacement_overlay(base_entries=base_merge.entries, overlay_map=modified_overlay.mapping)
         base_entries = append_new_entries(base_entries, extra_entries=modified_overlay_extra_entries)
-        components_entries = apply_overlay(base_entries=base_entries, overlay_map=resolved_components_overlay_map)
-        reputation_entries = apply_overlay(base_entries=base_entries, overlay_map=resolved_reputation_overlay_map)
-        components_reputation_entries = apply_overlay(base_entries=components_entries, overlay_map=resolved_reputation_overlay_map)
-        blueprints_entries = apply_overlay(base_entries=reputation_entries, overlay_map=resolved_blueprints_overlay_map)
-        combined_entries = apply_overlay(base_entries=components_reputation_entries, overlay_map=resolved_blueprints_overlay_map)
-        transport_entries = apply_overlay(base_entries=blueprints_entries, overlay_map=resolved_transport_overlay_map)
-        combined_transport_entries = apply_overlay(base_entries=combined_entries, overlay_map=resolved_transport_overlay_map)
-
-        variants = (
-            ("base", base_entries),
-            ("componentes", components_entries),
-            ("blueprints", transport_entries),
-            ("componentes-blueprints", combined_transport_entries),
+        variants = build_variant_entries(
+            base_entries=base_entries,
+            components_overlay_map=resolved_components_overlay_map,
+            transport_overlay_map=resolved_transport_overlay_map,
+            reputation_overlay_map=resolved_reputation_overlay_map,
+            blueprints_overlay_map=resolved_blueprints_overlay_map,
         )
         for variant_name, variant_entries in variants:
             validation_errors.extend(
@@ -691,9 +753,9 @@ def main() -> int:
 
         release_zip_path = release_packages_root / f"star-citizen-{language.code}-{args.version}.zip"
         create_package(
-            package_root=language_staging_root / "componentes-blueprints",
+            package_root=language_staging_root / FULL_INSTALLER_VARIANT,
             zip_path=release_zip_path,
-            entries=combined_transport_entries,
+            entries=dict(variants)[FULL_INSTALLER_VARIANT],
             game_language=language.game_language,
             user_cfg_source=user_cfg_absolute,
         )

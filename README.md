@@ -72,7 +72,7 @@ The current internal variants are:
 - `base`
 - `componentes`
 - `blueprints`
-- `componentes-blueprints`
+- `componentes-transport-reputation-blueprints`
 
 Internally, the mission-metadata stack is already split into independent layers:
 
@@ -282,7 +282,7 @@ python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translatio
 The build creates:
 
 - `dist/<version>/release-packages/star-citizen-<language>-<version>.zip`
-  Public ZIP package for manual install, built from `componentes-blueprints`.
+  Public ZIP package for manual install, built from `componentes-transport-reputation-blueprints`.
 - `dist/<version>/installer-bundle/star-citizen-installer-assets-<version>.zip`
   Technical bundle used by the installer for remote updates.
 - `dist/<version>/packages/star-citizen-<language>-<version>-<variant>.zip`
@@ -353,8 +353,8 @@ The app:
 - accepts either the channel folder or the `StarCitizen` root;
 - detects available languages in `staging`;
 - allows selecting the language before the overlay combination;
-- currently exposes checkboxes for `componentes` and `blueprints`, then resolves them to the internal variant bundle;
-- the `blueprints` checkbox currently implies the full mission-metadata stack: reputation, blueprint markers, and transport-route metadata;
+- currently exposes independent checkboxes for `componentes`, `transport`, `reputation`, and `blueprints`, then resolves them to the internal variant bundle;
+- mission metadata overlays are concatenated in this order: `transport`, `reputation`, `blueprints`;
 - copies `user.cfg` and `data/Localization/<game_language>/global.ini`;
 - warns when the target path requires administrator privileges.
 
@@ -507,7 +507,7 @@ Las variantes internas actuales son:
 - `base`
 - `componentes`
 - `blueprints`
-- `componentes-blueprints`
+- `componentes-transport-reputation-blueprints`
 
 Internamente, la pila de metadatos de misiones ya esta separada en capas:
 
@@ -710,7 +710,7 @@ python .\scripts\build_distributions.py --version 4.1.0 --allow-empty-translatio
 El build crea:
 
 - `dist/<version>/release-packages/star-citizen-<idioma>-<version>.zip`
-  ZIP publico para instalacion manual, generado a partir de `componentes-blueprints`.
+  ZIP publico para instalacion manual, generado a partir de `componentes-transport-reputation-blueprints`.
 - `dist/<version>/installer-bundle/star-citizen-installer-assets-<version>.zip`
   Bundle tecnico usado por el instalador para actualizaciones remotas.
 - `dist/<version>/packages/star-citizen-<idioma>-<version>-<variant>.zip`
@@ -780,8 +780,8 @@ La app:
 - acepta la carpeta de canal o la raiz de `StarCitizen`;
 - detecta los idiomas disponibles en el `staging`;
 - permite elegir idioma antes de la combinacion de overlays;
-- expone checkboxes para `componentes` y `blueprints`, y resuelve esa eleccion a la variante interna correspondiente;
-- la opcion `blueprints` implica hoy toda la pila de metadatos de misiones: reputacion, marcas de blueprint y rutas de transporte;
+- expone checkboxes independientes para `componentes`, `transport`, `reputation` y `blueprints`, y resuelve esa eleccion a la variante interna correspondiente;
+- los overlays de metadatos de misiones se concatenan en este orden: `transport`, `reputation`, `blueprints`;
 - copia `user.cfg` y `data/Localization/<game_language>/global.ini`;
 - avisa cuando la ruta requiere permisos de administrador.
 

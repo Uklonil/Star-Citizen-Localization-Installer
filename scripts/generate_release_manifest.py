@@ -8,11 +8,19 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-VARIANT_IDS = (
-    "base",
+OVERLAY_IDS = (
     "componentes",
+    "transport",
+    "reputation",
     "blueprints",
-    "componentes-blueprints",
+)
+VARIANT_IDS = ("base",) + tuple(
+    "-".join(
+        overlay_name
+        for index, overlay_name in enumerate(OVERLAY_IDS)
+        if mask & (1 << index)
+    )
+    for mask in range(1, 1 << len(OVERLAY_IDS))
 )
 DEFAULT_REPOSITORY = "Uklonil/Star-Citizen-Localization-Spanish"
 

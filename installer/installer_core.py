@@ -23,11 +23,25 @@ except ImportError:  # pragma: no cover - solo aplica en Windows
 
 CHANNELS = ("LIVE", "EPTU", "PTU")
 DEFAULT_VARIANT = "base"
-VARIANT_IDS = (
-    "base",
+OVERLAY_IDS = (
     "componentes",
+    "transport",
+    "reputation",
     "blueprints",
-    "componentes-blueprints",
+)
+VARIANT_IDS = ("base",) + tuple(
+    "-".join(
+        overlay_name
+        for overlay_name in OVERLAY_IDS
+        if selection[overlay_name]
+    )
+    for selection in (
+        {
+            overlay_name: bool(mask & (1 << index))
+            for index, overlay_name in enumerate(OVERLAY_IDS)
+        }
+        for mask in range(1, 1 << len(OVERLAY_IDS))
+    )
 )
 OVERLAY_IDS = (
     "componentes",
@@ -106,54 +120,66 @@ def _is_valid_variant_dir(path: Path, game_language: str) -> bool:
     return (path / "user.cfg").is_file() and _variant_global_ini_path(path, game_language).is_file()
 
 
-def variant_name_from_overlay_selection(*, components_enabled: bool, blueprints_enabled: bool) -> str:
-    if components_enabled and blueprints_enabled:
-        return "componentes-blueprints"
-    if components_enabled:
-        return "componentes"
-    if blueprints_enabled:
-        return "blueprints"
-    return "base"
+def variant_name_from_overlay_selection(
+    *,
+    componentes_enabled: bool,
+    transport_enabled: bool,
+    reputation_enabled: bool,
+    blueprints_enabled: bool,
+) -> str:
+    selected_overlays = [
+        overlay_name
+        for overlay_name, is_enabled in (
+            ("componentes", componentes_enabled),
+            ("transport", transport_enabled),
+            ("reputation", reputation_enabled),
+            ("blueprints", blueprints_enabled),
+        )
+        if is_enabled
+    ]
+    return "-".join(selected_overlays) if selected_overlays else "base"
 
 
-def overlay_selection_from_variant_name(variant_name: str) -> tuple[bool, bool]:
+def overlay_selection_from_variant_name(variant_name: str) -> tuple[bool, bool, bool, bool]:
     normalized = variant_name.strip().lower()
-    if normalized == "componentes-blueprints":
-        return True, True
-    if normalized == "componentes":
-        return True, False
-    if normalized == "blueprints":
-        return False, True
-    return False, False
+    selected_overlays = {part for part in normalized.split("-") if part}
+    return (
+        "componentes" in selected_overlays,
+        "transport" in selected_overlays,
+        "reputation" in selected_overlays,
+        "blueprints" in selected_overlays,
+    )
 
 
 def variant_supports_overlay(variant_name: str, overlay_name: str) -> bool:
-    components_enabled, blueprints_enabled = overlay_selection_from_variant_name(variant_name)
+    overlay_selection = dict(zip(OVERLAY_IDS, overlay_selection_from_variant_name(variant_name)))
     normalized_overlay = overlay_name.strip().lower()
-    if normalized_overlay == "componentes":
-        return components_enabled
-    if normalized_overlay == "blueprints":
-        return blueprints_enabled
+    if normalized_overlay in overlay_selection:
+        return overlay_selection[normalized_overlay]
     raise ValueError(f"Overlay desconocido: {overlay_name}")
 
 
 def resolve_variant_name(
     *,
     available_variants,
-    components_enabled: bool,
+    componentes_enabled: bool,
+    transport_enabled: bool,
+    reputation_enabled: bool,
     blueprints_enabled: bool,
 ) -> str | None:
     variant_name = variant_name_from_overlay_selection(
-        components_enabled=components_enabled,
+        componentes_enabled=componentes_enabled,
+        transport_enabled=transport_enabled,
+        reputation_enabled=reputation_enabled,
         blueprints_enabled=blueprints_enabled,
     )
     return variant_name if variant_name in set(available_variants) else None
 
 
-def default_overlay_selection(*, available_variants) -> tuple[bool, bool]:
+def default_overlay_selection(*, available_variants) -> tuple[bool, bool, bool, bool]:
     available = [variant_name for variant_name in VARIANT_IDS if variant_name in set(available_variants)]
     if not available:
-        return False, False
+        return False, False, False, False
 
     default_variant = DEFAULT_VARIANT if DEFAULT_VARIANT in available else available[0]
     return overlay_selection_from_variant_name(default_variant)
