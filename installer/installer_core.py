@@ -43,6 +43,10 @@ VARIANT_IDS = ("base",) + tuple(
         for mask in range(1, 1 << len(OVERLAY_IDS))
     )
 )
+OVERLAY_IDS = (
+    "componentes",
+    "blueprints",
+)
 DEFAULT_RELEASE_REPOSITORY = "Uklonil/Star-Citizen-Localization-Spanish"
 RELEASE_API_BASE_URL = f"https://api.github.com/repos/{DEFAULT_RELEASE_REPOSITORY}/releases"
 MANIFEST_ASSET_NAME = "manifest.json"
