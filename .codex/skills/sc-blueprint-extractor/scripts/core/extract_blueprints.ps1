@@ -35,7 +35,12 @@ if ($SkipDcbExport) {
     $arguments += "--skip-dcb-export"
 }
 
-& python @arguments
+$venvPython = "venv\Scripts\python.exe"
+if (Test-Path $venvPython) {
+    & $venvPython @arguments
+} else {
+    & python @arguments
+}
 
 if ($LASTEXITCODE -ne 0) {
     throw "Blueprint extraction workflow failed with exit code $LASTEXITCODE"
