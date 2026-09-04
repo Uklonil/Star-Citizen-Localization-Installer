@@ -25,7 +25,7 @@ from localization_tools import read_global_ini
 
 DEFAULT_SC_ROOT = Path(r"C:\Program Files\Roberts Space Industries\StarCitizen\LIVE")
 DEFAULT_CACHE_DIR = REPO_ROOT / ".scdt-cache"
-DEFAULT_EXTRACTED_GAME2 = REPO_ROOT / "data" / "starcitizen" / "extracts" / "current" / "game2" / "Game2.dcb"
+DEFAULT_EXTRACTED_GAME2 = Path("/data/starcitizen/extracts/current/game2/Game2.dcb")
 
 POOL_RE = re.compile(rb"BP_MISSIONREWARD_[A-Za-z0-9_]+")
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
