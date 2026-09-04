@@ -8,47 +8,39 @@ from installer import installer_core
 
 
 class InstallerVariantSelectionTests(unittest.TestCase):
-    def test_variant_name_from_overlay_selection_covers_all_combinations(self) -> None:
+    def test_variant_name_from_overlay_selection_covers_overlay_combinations(self) -> None:
         self.assertEqual(
             installer_core.variant_name_from_overlay_selection(
-                components_enabled=False,
+                componentes_enabled=False,
+                transport_enabled=False,
+                reputation_enabled=False,
                 blueprints_enabled=False,
             ),
             "base",
         )
         self.assertEqual(
             installer_core.variant_name_from_overlay_selection(
-                components_enabled=True,
-                blueprints_enabled=False,
-            ),
-            "componentes",
-        )
-        self.assertEqual(
-            installer_core.variant_name_from_overlay_selection(
-                components_enabled=False,
+                componentes_enabled=True,
+                transport_enabled=True,
+                reputation_enabled=False,
                 blueprints_enabled=True,
             ),
-            "blueprints",
-        )
-        self.assertEqual(
-            installer_core.variant_name_from_overlay_selection(
-                components_enabled=True,
-                blueprints_enabled=True,
-            ),
-            "componentes-blueprints",
+            "componentes-transport-blueprints",
         )
 
     def test_overlay_selection_from_variant_name_round_trips(self) -> None:
-        self.assertEqual(installer_core.overlay_selection_from_variant_name("base"), (False, False))
-        self.assertEqual(installer_core.overlay_selection_from_variant_name("componentes"), (True, False))
-        self.assertEqual(installer_core.overlay_selection_from_variant_name("blueprints"), (False, True))
-        self.assertEqual(installer_core.overlay_selection_from_variant_name("componentes-blueprints"), (True, True))
+        self.assertEqual(installer_core.overlay_selection_from_variant_name("base"), (False, False, False, False))
+        self.assertEqual(installer_core.overlay_selection_from_variant_name("componentes"), (True, False, False, False))
+        self.assertEqual(installer_core.overlay_selection_from_variant_name("transport-reputation"), (False, True, True, False))
+        self.assertEqual(installer_core.overlay_selection_from_variant_name("componentes-blueprints"), (True, False, False, True))
 
     def test_resolve_variant_name_returns_none_when_combination_missing(self) -> None:
         self.assertIsNone(
             installer_core.resolve_variant_name(
                 available_variants={"base", "componentes"},
-                components_enabled=False,
+                componentes_enabled=False,
+                transport_enabled=False,
+                reputation_enabled=False,
                 blueprints_enabled=True,
             )
         )
@@ -58,12 +50,14 @@ class InstallerVariantSelectionTests(unittest.TestCase):
             installer_core.default_overlay_selection(
                 available_variants={"blueprints"},
             ),
-            (False, True),
+            (False, False, False, True),
         )
 
     def test_variant_supports_overlay_matches_expected_capabilities(self) -> None:
         self.assertTrue(installer_core.variant_supports_overlay("componentes-blueprints", "componentes"))
         self.assertTrue(installer_core.variant_supports_overlay("componentes-blueprints", "blueprints"))
+        self.assertTrue(installer_core.variant_supports_overlay("transport-reputation", "transport"))
+        self.assertTrue(installer_core.variant_supports_overlay("transport-reputation", "reputation"))
         self.assertFalse(installer_core.variant_supports_overlay("base", "componentes"))
         self.assertFalse(installer_core.variant_supports_overlay("base", "blueprints"))
 

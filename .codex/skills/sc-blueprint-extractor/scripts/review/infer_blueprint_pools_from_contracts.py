@@ -666,6 +666,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Infiere pools desde contratos detectados en Game2.dcb.")
     parser.add_argument("--sc-root", default=str(DEFAULT_SC_ROOT))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
+    parser.add_argument(
+        "--game2",
+        help="Ruta directa a Game2.dcb; evita reabrir Data.p4k mediante scdatatools.",
+    )
     parser.add_argument("--global-ini", default=str(DEFAULT_GLOBAL))
     parser.add_argument("--template", default=str(DEFAULT_TEMPLATE))
     parser.add_argument("--pools", default=str(DEFAULT_POOLS))
@@ -680,10 +684,16 @@ def main() -> int:
     shortlist_missions = parse_shortlist(Path(args.shortlist).expanduser().resolve(), global_map)
     template_missions = collect_template_missions(template_map, global_map)
     known_desc_pools = resolve_known_pools(template_map, pools_data)
-    _dcb_member, raw = load_raw_dcb(
-        Path(args.sc_root).expanduser().resolve(),
-        Path(args.cache_dir).expanduser().resolve(),
-    )
+    if args.game2:
+        game2_path = Path(args.game2).expanduser().resolve()
+        if not game2_path.is_file():
+            raise FileNotFoundError(f"No existe Game2.dcb: {game2_path}")
+        raw = game2_path.read_bytes()
+    else:
+        _dcb_member, raw = load_raw_dcb(
+            Path(args.sc_root).expanduser().resolve(),
+            Path(args.cache_dir).expanduser().resolve(),
+        )
     strings = split_strings_with_offsets(raw)
     build_report(
         template_missions=template_missions,

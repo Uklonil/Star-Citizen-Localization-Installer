@@ -16,7 +16,7 @@ if str(CORE_SCRIPTS) not in sys.path:
 from runtime_support import REPO_ROOT, find_datacore_member
 
 
-DEFAULT_EXTRACTED_GAME2 = REPO_ROOT / "data" / "starcitizen" / "extracts" / "current" / "game2" / "Game2.dcb"
+DEFAULT_EXTRACTED_GAME2 = Path("/data/starcitizen/extracts/current/game2/Game2.dcb")
 
 
 def load_raw_dcb(sc_root: Path, cache_dir: Path) -> tuple[str, bytes]:

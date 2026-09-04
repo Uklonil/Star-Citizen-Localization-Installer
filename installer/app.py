@@ -403,32 +403,6 @@ def main(page: ft.Page) -> None:
         selected_overlays["reputation"] = default_reputation
         selected_overlays["blueprints"] = default_blueprints
 
-    def overlay_label(overlay_name: str) -> str:
-        return strings()[f"overlay_{overlay_name}_label"]
-
-    def overlay_description(overlay_name: str) -> str:
-        return strings()[f"overlay_{overlay_name}_desc"]
-
-    def selected_variant_name() -> str | None:
-        return resolve_variant_name(
-            available_variants=selected_language.variants,
-            components_enabled=selected_overlays["componentes"],
-            blueprints_enabled=selected_overlays["blueprints"],
-        )
-
-    def ensure_overlay_selection(language: LanguageBundle) -> None:
-        variant_name = resolve_variant_name(
-            available_variants=language.variants,
-            components_enabled=selected_overlays["componentes"],
-            blueprints_enabled=selected_overlays["blueprints"],
-        )
-        if variant_name is not None:
-            return
-
-        default_components, default_blueprints = default_overlay_selection(available_variants=language.variants)
-        selected_overlays["componentes"] = default_components
-        selected_overlays["blueprints"] = default_blueprints
-
     def update_status(message: str, *, error: bool = False) -> None:
         status_text.value = message
         status_text.color = "#FFB4AB" if error else "#C7CDD3"
