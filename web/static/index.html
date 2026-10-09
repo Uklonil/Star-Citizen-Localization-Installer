@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SC Localization Studio</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header><div><span class="eyebrow">STAR CITIZEN · LOCALIZATION</span><h1>Localization Studio</h1></div><div id="status" class="stats"></div></header>
+  <nav><button class="tab active" data-view="translations">Claves</button><button class="tab" data-view="blueprints">Blueprints y misiones</button><button class="tab" data-view="components">Componentes</button><button class="tab" data-view="patch">Nuevo parche y exportación</button></nav>
+  <main>
+    <section id="translations" class="view active">
+      <div class="toolbar"><input id="search" placeholder="Buscar clave, original o traducción…"><label class="filter"><input id="pending-only" type="checkbox"> Sin traducción ES</label><label class="filter"><input id="same-only" type="checkbox"> Igual que EN</label><span id="entry-count"></span></div>
+      <div class="split"><aside id="entry-list"></aside><article id="editor" class="empty">Selecciona una clave para editar su valor en español.</article></div>
+    </section>
+    <section id="blueprints" class="view">
+      <p class="intro">Edita los datos estructurados. Las relaciones de misión se guardan en <code>mission_pool_map</code>; los metadatos de contratos se guardan por separado.</p>
+      <div class="blueprint-grid"><div><h2>Pool de recompensas</h2><div class="inline-controls"><select id="pool-select"></select><button id="new-pool">Nueva pool</button></div><p class="help">Objetos incluidos · usa nombres traducidos para identificarlos.</p><div id="pool-items" class="item-list"></div><input id="item-search" placeholder="Buscar objeto para añadir…"><div id="item-results" class="search-results"></div><details class="technical"><summary>IDs técnicos del pool</summary><textarea id="pool-refs" spellcheck="false" readonly></textarea></details><button id="save-pool">Guardar pool</button></div><div><h2>Enlace misión → pool(s)</h2><select id="mission-select"></select><p id="mission-name" class="mission-description"></p><div id="mission-pools" class="check-list"></div><button id="save-mission">Guardar enlace</button></div></div>
+      <details><summary>Metadatos de contratos (JSON avanzado)</summary><textarea id="metadata" class="json" spellcheck="false"></textarea><button id="save-metadata">Guardar metadatos</button></details>
+    </section>
+    <section id="components" class="view"><p class="intro">Selecciona una clave de objeto y añade al nombre el tipo de componente. El resultado se guarda como sufijo en <code>components.ini</code>.</p><div class="component-layout"><div><input id="component-search" placeholder="Buscar nombre, traducción o clave…"><div id="component-results" class="component-results"></div></div><article id="component-editor" class="empty">Selecciona una clave para asignarle un tipo de componente.</article></div></section>
+    <section id="patch" class="view"><h2>Actualizar parche</h2><p>Importa el <code>global.ini</code> original. La aplicación crea una copia recuperable como <code>input/current/global.ini.previous</code> antes de reemplazarlo.</p><input type="file" id="global-file" accept=".ini"><button id="import-global">Importar global.ini</button><hr><h2>Generar distribución</h2><p>Construye los paquetes con el compilador actual y deja los resultados en <code>dist/&lt;versión&gt;/</code>.</p><button id="export">Exportar paquete es-ES</button><pre id="job-output"></pre></section>
+  </main><div id="toast" role="status"></div><script src="/app.js"></script>
+</body>
+</html>
