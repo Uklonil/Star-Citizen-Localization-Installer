@@ -12,3 +12,4 @@ informes/
 tools/
 data/
 input/current/StarStrings/
+web/*.sqlite
