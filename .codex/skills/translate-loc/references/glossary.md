@@ -24,6 +24,7 @@ Reputation = Reputación
 Bounty = Recompensa
 Bounty Hunter = Cazarrecompensas
 Server Blade = unidad de servidor
+Livery = Diseño
 
 ## Usually do not translate
 Stanton

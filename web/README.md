@@ -11,18 +11,25 @@ Abra `http://127.0.0.1:8765`. El servicio escucha únicamente en localhost.
 
 ## Propuestas de traducción con IA
 
-Para activar el botón **Proponer con IA**, defina una clave de OpenAI antes de
-iniciar el panel. La propuesta se inserta en el editor para su revisión y no se
-guarda automáticamente.
+Para activar el botón **Proponer con IA**, instala e inicia sesión en Codex CLI
+en la máquina local. El panel invoca `codex exec` en modo de solo lectura. La
+propuesta se inserta en el editor para su revisión y no se guarda automáticamente.
 
 ```powershell
-$env:OPENAI_API_KEY = "..."
-# Opcional: $env:OPENAI_TRANSLATION_MODEL = "<modelo>"
+npm install -g @openai/codex
+codex login
+# Opcional: $env:CODEX_TRANSLATION_MODEL = "<modelo>"
 .\venv\Scripts\python.exe .\web\app.py
 ```
 
-El servidor valida que la propuesta conserve placeholders, escapes y marcado
-antes de devolverla al navegador.
+Las propuestas se muestran aunque alteren placeholders, escapes o marcado para
+permitir su revisión. La validación estricta se ejecuta únicamente al guardar
+un valor en `translation.ini`.
+
+Tras una exportación fallida, **Crear borradores IA para fallos** recorre de
+forma secuencial las claves marcadas y guarda las propuestas en SQLite. No
+modifica `translation.ini`: revise cada borrador desde el filtro **Fallos de
+exportación**, cárguelo en el editor y guárdelo explícitamente.
 
 ## Modelo de datos
 
