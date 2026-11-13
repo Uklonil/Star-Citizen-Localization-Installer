@@ -18,8 +18,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.request
+import threading
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -34,6 +33,8 @@ POOLS = ROOT / "source" / "blueprints" / "pools.json"
 METADATA = ROOT / "source" / "blueprints" / "contracts_metadata.json"
 COMPONENTS = ROOT / "source" / "languages" / "es-es" / "overlays" / "components.ini"
 VERSION = ROOT / "VERSION"
+REPAIR_LOCK = threading.Lock()
+REPAIR_JOB: dict[str, object] = {"running": False, "total": 0, "completed": 0, "proposed": 0, "failed": 0, "last_error": ""}
 DATABASE = ROOT / "web" / "localization_studio.sqlite"
 TOKEN_RE = re.compile(r"%(?:\d+\$)?[sdif]|\{(?:\d+|[A-Za-z_][A-Za-z0-9_]*)\}|\\[ntr\"]|\[\[.*?\]\]|</?EM[1-4]>")
 
@@ -92,33 +93,46 @@ def validate_tokens(source: str, candidate: str) -> None:
 
 
 def ai_translation_proposal(source: str) -> str:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("Configura OPENAI_API_KEY antes de solicitar una propuesta de IA.")
+    """Ask the locally installed Codex CLI for a reviewable translation proposal."""
+    codex = shutil.which("codex.cmd") or shutil.which("codex")
+    if not codex:
+        raise ValueError("No se encontró Codex CLI. Instálalo con npm o añade `codex` al PATH.")
     prompt = (
         "Traduce al español de España una única cadena de interfaz de Star Citizen. "
+        "No uses herramientas, no ejecutes comandos y no edites archivos. "
         "Devuelve exclusivamente la traducción, sin comillas ni explicación. "
         "Conserva exactamente placeholders (%s, {name}), escapes (\\n), etiquetas "
         "(<EM4>, [[...]]), nombres propios, marcas y códigos internos. "
         "Usa un tono claro y conciso. Cadena: " + source
     )
-    payload = json.dumps({
-        "model": os.environ.get("OPENAI_TRANSLATION_MODEL", "gpt-4.1-mini"),
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
-    }).encode("utf-8")
-    request = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as file:
+        output_path = Path(file.name)
+    command = [codex, "exec", "--sandbox", "read-only", "--color", "never", "--output-last-message", str(output_path)]
+    model = os.environ.get("CODEX_TRANSLATION_MODEL")
+    if model:
+        command.extend(("--model", model))
+    command.append("-")
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
-            proposed = json.loads(response.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
-    except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"No se pudo obtener una propuesta de IA: {error}") from error
-    validate_tokens(source, proposed)
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            input=prompt,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            capture_output=True,
+            timeout=90,
+        )
+        if result.returncode:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(f"Codex CLI no pudo generar la propuesta: {detail}")
+        proposed = output_path.read_text(encoding="utf-8").strip()
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError(f"No se pudo ejecutar Codex CLI: {error}") from error
+    finally:
+        output_path.unlink(missing_ok=True)
+    if not proposed:
+        raise RuntimeError("Codex CLI no devolvió texto para la propuesta.")
     return proposed
 
 
@@ -154,6 +168,9 @@ def sync_database() -> None:
             CREATE TABLE mission_pools (mission_key TEXT NOT NULL, pool_name TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY(mission_key, position));
             CREATE TABLE contract_metadata (kind TEXT NOT NULL, entry_key TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(kind, entry_key));
             CREATE TABLE component_overlays (key TEXT PRIMARY KEY, component_type TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS export_issues (key TEXT PRIMARY KEY, message TEXT NOT NULL, recorded_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS ai_proposals (key TEXT PRIMARY KEY, translation TEXT NOT NULL, created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS approved_same_values (key TEXT PRIMARY KEY, approved_at TEXT NOT NULL);
         """)
         db.executemany("INSERT INTO entries VALUES (?, ?, ?)", ((key, value, translations.get(key, "")) for key, value in global_entries.items()))
         db.executemany("INSERT INTO pools VALUES (?)", ((name,) for name in source["pools"]))
@@ -161,6 +178,48 @@ def sync_database() -> None:
         db.executemany("INSERT INTO mission_pools VALUES (?, ?, ?)", ((mission, pool, position) for mission, names in source["mission_pool_map"].items() for position, pool in enumerate(names if isinstance(names, list) else [names])))
         db.executemany("INSERT INTO contract_metadata VALUES (?, ?, ?)", ((kind, key, json.dumps(value, ensure_ascii=False)) for kind in ("title_meta", "description_meta") for key, value in metadata.get(kind, {}).items()))
         db.executemany("INSERT INTO component_overlays VALUES (?, ?)", components.items())
+
+
+def record_export_issues(output: str) -> int:
+    english = parse_ini(GLOBAL)
+    candidates = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*(?:,[A-Za-z])?", output))
+    issue_keys = candidates & set(english)
+    if "is missing" in output and "current global.ini" in output:
+        translations = parse_ini(TRANSLATION)
+        issue_keys.update(key for key, value in english.items() if value.strip() and not translations.get(key, ""))
+    if not issue_keys:
+        return 0
+    message = output[-4000:]
+    with database() as db:
+        db.executemany(
+            "INSERT OR REPLACE INTO export_issues VALUES (?, ?, datetime('now'))",
+            ((key, message) for key in issue_keys),
+        )
+    return len(issue_keys)
+
+
+def repair_export_issues() -> None:
+    with database() as db:
+        keys = [row[0] for row in db.execute("SELECT key FROM export_issues ORDER BY key").fetchall()]
+    english = parse_ini(GLOBAL)
+    with REPAIR_LOCK:
+        REPAIR_JOB.update({"running": True, "total": len(keys), "completed": 0, "proposed": 0, "failed": 0, "last_error": ""})
+    for key in keys:
+        try:
+            proposal = ai_translation_proposal(english[key])
+            with database() as db:
+                db.execute("INSERT OR REPLACE INTO ai_proposals VALUES (?, ?, datetime('now'))", (key, proposal))
+            with REPAIR_LOCK:
+                REPAIR_JOB["proposed"] = int(REPAIR_JOB["proposed"]) + 1
+        except Exception as error:
+            with REPAIR_LOCK:
+                REPAIR_JOB["failed"] = int(REPAIR_JOB["failed"]) + 1
+                REPAIR_JOB["last_error"] = str(error)
+        finally:
+            with REPAIR_LOCK:
+                REPAIR_JOB["completed"] = int(REPAIR_JOB["completed"]) + 1
+    with REPAIR_LOCK:
+        REPAIR_JOB["running"] = False
 
 
 def item_label(item_key: str, english: dict[str, str], translations: dict[str, str]) -> dict[str, str]:
@@ -205,8 +264,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             query = parse_qs(parsed.query).get("q", [""])[0].casefold()
             pending_only = parse_qs(parsed.query).get("pending", ["0"])[0] == "1"
             same_only = parse_qs(parsed.query).get("same", ["0"])[0] == "1"
+            failed_only = parse_qs(parsed.query).get("failed", ["0"])[0] == "1"
             with database() as db:
-                filter_sql = "translated_value = '' AND trim(source_value) <> ''" if pending_only else "translated_value = source_value AND trim(source_value) <> ''" if same_only else ""
+                filter_sql = "translated_value = '' AND trim(source_value) <> ''" if pending_only else "translated_value = source_value AND trim(source_value) <> '' AND key NOT IN (SELECT key FROM approved_same_values)" if same_only else "key IN (SELECT key FROM export_issues)" if failed_only else ""
                 if query:
                     pattern = f"%{query}%"
                     where = f"({filter_sql} AND " if filter_sql else "("
@@ -218,7 +278,16 @@ class AppHandler(SimpleHTTPRequestHandler):
                     fetched = db.execute(f"SELECT key, source_value, translated_value FROM entries {where} ORDER BY key LIMIT 500").fetchall()
                     total = db.execute(f"SELECT COUNT(*) FROM entries {where}").fetchone()[0]
             rows = [{"key": row["key"], "source": row["source_value"], "translation": row["translated_value"]} for row in fetched]
+            if rows:
+                with database() as db:
+                    proposals = dict(db.execute("SELECT key, translation FROM ai_proposals WHERE key IN (" + ",".join("?" for _ in rows) + ")", tuple(row["key"] for row in rows)).fetchall())
+                for row in rows:
+                    row["proposal"] = proposals.get(row["key"], "")
             self.send_json({"entries": rows, "total": total})
+            return
+        if parsed.path == "/api/repair-status":
+            with REPAIR_LOCK:
+                self.send_json(REPAIR_JOB.copy())
             return
         if parsed.path == "/api/blueprints":
             english, translations = parse_ini(GLOBAL), parse_ini(TRANSLATION)
@@ -265,6 +334,20 @@ class AppHandler(SimpleHTTPRequestHandler):
                 validate_tokens(source, value)
                 update_ini_value(TRANSLATION, key, value)
                 sync_database()
+                with database() as db:
+                    db.execute("DELETE FROM export_issues WHERE key = ?", (key,))
+                    db.execute("DELETE FROM ai_proposals WHERE key = ?", (key,))
+                    if value != source:
+                        db.execute("DELETE FROM approved_same_values WHERE key = ?", (key,))
+                return self.send_json({"ok": True})
+            if self.path == "/api/approve-same":
+                payload = self.body()
+                key = payload["key"]
+                entries, translations = parse_ini(GLOBAL), parse_ini(TRANSLATION)
+                if key not in entries or not entries[key].strip() or translations.get(key) != entries[key]:
+                    raise ValueError("Solo se pueden aprobar claves con un valor español idéntico al inglés.")
+                with database() as db:
+                    db.execute("INSERT OR REPLACE INTO approved_same_values VALUES (?, datetime('now'))", (key,))
                 return self.send_json({"ok": True})
             if self.path == "/api/translate-ai":
                 payload = self.body()
@@ -320,8 +403,24 @@ class AppHandler(SimpleHTTPRequestHandler):
                 command = [sys.executable, "scripts/build_distributions.py", "--language", language, "--version", version]
                 result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=300)
                 if result.returncode:
-                    raise RuntimeError(result.stderr or result.stdout or "La compilación no ha terminado correctamente.")
+                    output = result.stdout + "\n" + result.stderr
+                    marked = record_export_issues(output)
+                    raise RuntimeError((output or "La compilación no ha terminado correctamente.") + f"\nClaves marcadas para revisión: {marked}.")
+                with database() as db:
+                    db.execute("DELETE FROM export_issues")
                 return self.send_json({"ok": True, "output": result.stdout, "directory": f"dist/{version}"})
+            if self.path == "/api/repair-export":
+                with REPAIR_LOCK:
+                    if REPAIR_JOB["running"]:
+                        raise ValueError("Ya hay una reparación de exportación en curso.")
+                with database() as db:
+                    total = db.execute("SELECT COUNT(*) FROM export_issues").fetchone()[0]
+                if not total:
+                    raise ValueError("No hay claves marcadas por fallos de exportación.")
+                with REPAIR_LOCK:
+                    REPAIR_JOB.update({"running": True, "total": total, "completed": 0, "proposed": 0, "failed": 0, "last_error": ""})
+                threading.Thread(target=repair_export_issues, daemon=True).start()
+                return self.send_json({"ok": True, "total": total})
             self.send_error(HTTPStatus.NOT_FOUND)
         except (KeyError, TypeError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
             self.send_json({"ok": False, "error": str(error)}, 400)
